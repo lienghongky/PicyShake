@@ -165,7 +165,7 @@ export default function Home() {
         <DragAndDrop onUploadResponse={onUploadResponse} />
       </div>
 
-      <div className="w-2/3 rounded-b-xl border bg-base-300 my-8">
+      <div className="w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8">
 
         <div className="w-full">
           <div className="diff aspect-[16/9]">

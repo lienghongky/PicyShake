@@ -1,7 +1,7 @@
 fastapi 
 uvicorn[standard]
 python-multipart
-tensorflow[and-cuda]
+tensorflow[and-cuda]==2.13.1
 typing-extensions==4.8.0
 tqdm
 Pillow
