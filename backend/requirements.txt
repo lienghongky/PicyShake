@@ -6,3 +6,4 @@ typing-extensions==4.8.0
 tqdm
 Pillow
 blurhash
+patchify

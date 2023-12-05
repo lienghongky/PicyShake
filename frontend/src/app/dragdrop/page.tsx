@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { use, useRef, useState,useEffect } from "react";
 
 export interface DragAndDropProps {
   onUploadResponse?: (response: any) => void;
@@ -10,6 +10,26 @@ export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
   const inputRef = useRef<any>(null);
   const [files, setFiles] = useState<any>([]);
   
+  useEffect(() => {
+      // handle paste event check if is image file and add to files
+  document.addEventListener("paste", function (e: ClipboardEvent) {
+    // Clear the previous timeout if it exists
+    const items = e.clipboardData?.items;
+    console.log(items);
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const blob = items[i].getAsFile();
+          console.log(blob);
+          setFiles((prevState: any) => [blob]);
+        }
+      }
+    }
+  });
+  }, []);
+  
+
+
   function handleChange(e: any) {
     e.preventDefault();
     console.log("File has been added");
@@ -85,12 +105,12 @@ export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
   }
 
   return (
-    <div className="flex items-center justify-center w-full">
+    <div className="flex items-center justify-center w-full m-0 p-0">
       <form
        action="/files/" encType="multipart/form-data" method="post"
         className={`${
           dragActive ? "bg-gray-400" : "bg-gray-900 bg-opacity-70"
-        }  p-4 w-1/3 rounded-lg  min-h-[10rem] text-center flex flex-col items-center justify-center border-separate border-4 border-dashed border-gray-600`}
+        }  p-4 w-full rounded-lg  min-h-[10rem] text-center flex flex-col items-center justify-center border-separate border-4 border-dashed border-gray-600`}
         onDragEnter={handleDragEnter}
         onSubmit={(e) => e.preventDefault()}
         onDrop={handleDrop}
@@ -108,8 +128,8 @@ export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
           accept="image/*"
         />
 
-        <p className="text-gray-700 font-bold">
-          Drag & Drop files or{" "}
+        <p className="text-gray-700 font-bold text-sm">
+          Drag & Drop files or<br/>{" "}
           <span
             className="font-bold text-blue-600 cursor-pointer"
             onClick={openFileExplorer}
@@ -119,10 +139,10 @@ export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
           to upload
         </p>
 
-        <div className="flex flex-col items-center p-3">
+        <div className="w-full flex flex-col items-center p-3">
           {files.map((file: any, idx: any) => (
-            <div key={idx} className="flex flex-row space-x-5">
-              <span>{file.name}</span>
+            <div key={idx} className="bg-zinc-700/50 rounded-lg p-2 border border-zinc-700/50 w-full flex flex-row space-x-5 whitespace-nowrap">
+              <p className="text-ellipsis truncate">{file.name}</p>
               <span
                 className="text-red-500 cursor-pointer"
                 onClick={() => removeFile(file.name, idx)}

@@ -5,17 +5,23 @@ import { useState, useEffect } from "react";
 import { json } from "stream/consumers";
 
 export default function Home() {
+
   const getLocalSelectedModel = () => {
-    const selectedModel = localStorage.getItem('selectedModel');
-    if (selectedModel) {
-      try {
-        return JSON.parse(selectedModel);
-      } catch (error) {
-        // console.error('Error parsing JSON from local storage:', error);
+    if (typeof window !== 'undefined') {
+      const selectedModel = window.localStorage.getItem('selectedModel');
+      if (selectedModel) {
+        try {
+          return JSON.parse(selectedModel);
+        } catch (error) {
+          return {id: -1, name: "Default Model"};
+          // console.error('Error parsing JSON from local storage:', error);
+        }
       }
+    }else {
+      return {id: -1, name: "Default Model"};
     }
-    return {id: -1, name: "Default"};
   }
+
   const selectModel = (id:string) => {
     fetch(`http://localhost:8000/selectmodel/`+id, {
       method: "POST",
@@ -28,7 +34,7 @@ export default function Home() {
       .catch((err) => console.log(err));
   }
 
-  const [isToggled, setIsToggled] = useState<boolean>(false);
+  const [isToggled, setIsToggled] = useState<boolean>(true);
   const [progress, setProgress] = useState(0);
   const [outputImage, setOutputImage] = useState<string>("");
   const [inputImage, setInputImage] = useState<string>("");
@@ -96,7 +102,7 @@ export default function Home() {
     setSelectedModel(models[event.target.value]);
   };
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-10 bg-black-opactiy-30">
+    <main className="flex min-h-screen flex-col items-center justify-between p-4 bg-black-opactiy-30">
       {/* Side bar */}
       <div className="drawer z-50 fixed top-4 left-4">
         <button
@@ -127,20 +133,25 @@ export default function Home() {
 
       {/* Side bar */}
       <div
-        className={`z-40 fixed top-1/2 left-4 transform -translate-y-1/2 h-2/3 w-48 bg-gray-900 rounded-xl border border-neutral-600 backdrop-blur-2xl ${
-          isToggled ? "block" : "hidden"
+        className={`transition-2 transition-all z-40 w-80 fixed top-1/2 left-4 transform -translate-y-1/2 h-2/3 bg-gray-900 rounded-xl border border-neutral-600 backdrop-blur-2xl ${
+          isToggled ? "block translate-x-0" : " -translate-x-full"
         }`}
-        onClick={handleToggle}
-      ></div>
-
-      {/* main container */}
-      <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
-        <div className="mr-8 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          <select value={selectedModel.id} onChange={handleSelectChange} className="bg-zinc-800/30" >
-            <option key={-1} value="-1">Default</option>
+      >
+        <div className="p-4 w-full">
+          <DragAndDrop onUploadResponse={onUploadResponse} />
+        </div>
+        <div className="absolute top-1 left-2 right-2 m-2 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-zinc-800/30 lg:p-4 lg:dark:bg-zinc-800/30">
+          <select value={selectedModel.id} onChange={handleSelectChange} className="bg-zinc-800/30 absolute top-1 left-2 right-2 " >
+            <option key={-1} value="-1">Default Model</option>
             {models.map((model: any) => ( <option key={model.id} value={model.id}>{model.name}</option>))}
           </select>
         </div>
+
+      </div>
+
+      {/* main container */}
+      <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
+        <div className="w-full"></div>
 
         <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
           <a
@@ -161,39 +172,39 @@ export default function Home() {
           </a>
         </div>
       </div>
-      <div className="pt-4 w-full">
-        <DragAndDrop onUploadResponse={onUploadResponse} />
-      </div>
+    
 
-      <div className="w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8">
+      <div className={isToggled ? "w-full flex justify-end" :"w-full flex justify-center"}>
+        <div className="w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100">
 
-        <div className="w-full">
-          <div className="diff aspect-[16/9]">
-            <div className="diff-item-1">
-              <img
-                className={isLoaded ? "" : "blur-lg"}
-                src={isLoaded ? outputImage : inputImage}
-              />
+          <div className="w-full">
+            <div className="diff aspect-[16/9]">
+              <div className="diff-item-1">
+                <img
+                  className={isLoaded ? "" : "blur-lg"}
+                  src={isLoaded ? outputImage : inputImage}
+                />
+              </div>
+              <div className="diff-item-2">
+                <img 
+                  src={inputImage} />
+              </div>
+              <div className="diff-resizer"></div>
             </div>
-            <div className="diff-item-2">
-              <img 
-                src={inputImage} />
-            </div>
-            <div className="diff-resizer"></div>
+          </div>
+          <div className="flex items-center">
+            <p className="text-xd text-teal-500 p-1">{`${progress}%`}</p>
+            <progress
+              className="progress progress-accent w-full"
+              value={progress}
+              max="100"
+            ></progress>
           </div>
         </div>
-        <div className="flex items-center">
-          <p className="text-xd text-teal-500 p-1">{`${progress}%`}</p>
-          <progress
-            className="progress progress-accent w-full"
-            value={progress}
-            max="100"
-          ></progress>
-        </div>
       </div>
 
-      <footer className="text-xs text-center text-gray-500 mt-4">
-        Created on {new Date().toLocaleDateString()} &copy; LIENG HONGKY | VB
+      <footer className="text-xs text-center dark:text-gray-200 mt-4">
+        Created on {new Date().toLocaleDateString()} &copy; <strong>LIENG HONGKY</strong> | VB
         lab @PNU
       </footer>
     </main>

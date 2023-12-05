@@ -98,17 +98,6 @@ def read_item(item_id: int, q: Union[str, None] = None):
     return {"item_id": item_id, "q": q}
 
 
-@app.post("/files/")
-async def create_files(
-    files: Annotated[list[bytes], File(description="Multiple files as bytes")],
-):
-    save_directory = "./files/images"
-    os.makedirs(save_directory, exist_ok=True)
-    
-    file_sizes = []
-    return {"file_sizes": file_sizes}
-
-
 @app.post("/uploadfiles/")
 async def create_upload_files(
     files: Annotated[
@@ -120,14 +109,14 @@ async def create_upload_files(
     filenames = []
     for i, file in enumerate(files):
         current_time = dt.datetime.now().strftime("%Y%m%d%H%M%S%f")
-        file_location = f"files/{current_time}_{i}_{file.filename}"
+        file_location = f"files/inputs/{current_time}_{i}_{file.filename}"
         print(file_location)
         with open(file_location, "wb+") as file_object:
             file_object.write(file.file.read())
         # generate blurhash
         blurhash_str = "rOpGG-oBUNG,qRj2so|=eE1w^n4S5NH"
-                
-        filenames.append({"input":file_location.replace("files/", ""), "blurhash": blurhash_str})
+        basefilename = os.path.basename(file_location)
+        filenames.append({"input":basefilename, "blurhash": blurhash_str})
         # Run denoising process in background thread
         modelThread = threading.Thread(target=denoise_image, args=(file_location,))
         modelThread.start()
@@ -141,7 +130,7 @@ async def handle_models():
 async def select_model(model_id: int):
     model_name = getModels()[model_id]["name"]
     if model_name != inference.model_name:
-        inference.load_model(model_name)
+        inference.load_model(f"models/{model_name}")
     return {"message": "loaded"}
 # handle image request
 @app.get("/result/{image_id}")
@@ -151,7 +140,7 @@ async def get_image(image_id: str):
 # handle image request
 @app.get("/input/{image_id}")
 async def get_image(image_id: str):
-    image_path = "./files/" + image_id
+    image_path = "./files/inputs/" + image_id
     return FileResponse(image_path)
 # handle image request
 @app.get("/ping")

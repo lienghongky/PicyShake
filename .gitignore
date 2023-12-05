@@ -51,7 +51,7 @@ backend/site_build
 backend/venv
 backend/docs.zip
 backend/archive.zip
-backend/files
+backend/files/*
 backend/ModelClass/__pycache__/*
 # vim temporary files
 backend/*~
