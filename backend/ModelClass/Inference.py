@@ -25,10 +25,12 @@ class Inference:
       if gpus:
         try:
             tf.config.experimental.set_memory_growth(gpus[0], True)
-            # Restrict TensorFlow to only allocate 2GB of memory on the first GPU
-            # tf.config.experimental.set_virtual_device_configuration(
-            #     gpus[0],
-            #     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6048)])
+             # Restrict TensorFlow to only allocate 2GB of memory on the first GPU
+            print("Physical GPU:", tf.config.list_physical_devices('GPU'))
+            print(f"GPU Name: {gpu.name}")
+            print(f"Total GPU Memory: {tf.config.experimental.get_memory_info(gpu)['total']} bytes")
+            print(f"Currently Allocated GPU Memory: {tf.config.experimental.get_memory_info(gpu)['currently_allocated']} bytes")
+            print(f"Free GPU Memory: {tf.config.experimental.get_memory_info(gpu)['free']} bytes")
 
             print("Initialized with Physical GPU:", tf.config.list_physical_devices('GPU'))
         except RuntimeError as e:
@@ -80,15 +82,26 @@ class Inference:
         print(f"Predicting with [{self.model_name}]")
         # Get the denoised image using the model
         denoised_patches = patches
+        noisy_patches = []
         for i in range(patches.shape[0]):
           for j in range(patches.shape[1]):
               single_patch_img = patches[i, j, :, :, :][0]
               single_patch_img = single_patch_img / 255.0
-              denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
-              denoised_patche = denoised_patche.clip(0, 1)
-              denoised_patche = denoised_patche * 255.0
-              denoised_patches[i, j, :, :, :] = denoised_patche
-              Image.fromarray((denoised_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
+              # single_patch_img = tf.expand_dims(single_patch_img, axis=0)
+              noisy_patches.append(single_patch_img)
+
+        noisy_patches = np.array(noisy_patches) 
+        print(noisy_patches[0].shape)
+        output_patches = self.RIDNet.predict(noisy_patches,callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])
+
+        for i in range(denoised_patches.shape[0]):
+          for j in range(denoised_patches.shape[1]):
+            
+              denoised_output_patche = output_patches[i*denoised_patches.shape[1]+j]
+              denoised_output_patche = denoised_output_patche.clip(0, 1) 
+              denoised_output_patche = denoised_output_patche * 255.0
+              denoised_patches[i, j, :, :, :] = denoised_output_patche
+              Image.fromarray((denoised_output_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
         
         denoised_image = unpatchify(denoised_patches, padded_image.shape) 
         #save denoised image to debugs
