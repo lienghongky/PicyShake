@@ -130,8 +130,12 @@ async def handle_models():
 async def select_model(model_id: int):
     model_name = getModels()[model_id]["name"]
     if model_name != inference.model_name:
-        inference.load_model(f"models/{model_name}")
-    return {"message": "loaded"}
+        result = inference.load_model(f"models/{model_name}")
+        if result:
+            return {"alert": {"type": "success", "message": f"Model loaded successfully [<strong>{model_name}</strong>]"}}
+        else:
+            return {"alert": {"type": "error", "message": "Model loading failed"}}
+    return {"alert": {"type": "error", "message": f"No model name {model_name}"}}
 # handle image request
 @app.get("/result/{image_id}")
 async def get_image(image_id: str):
@@ -175,7 +179,7 @@ async def updateProgess():
 # denoise image and return the denoised image
 def denoise_image(image_path):
     threading.Thread(target=updateProgess).start()
-    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path)
+    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,mode=Inference.PredictionMode.ITERATE )
     # Send the denoised image to the client
     asyncio.run(manager.send_result(["0"], {"url": denoised_image_name, "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
@@ -185,3 +189,4 @@ def getModels():
     for i, filename in enumerate(os.listdir("./models")):
         models.append({"id":i, "name":filename})
     return models
+

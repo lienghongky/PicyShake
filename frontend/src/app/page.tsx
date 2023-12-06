@@ -28,11 +28,16 @@ export default function Home() {
       body: JSON.stringify({id: id}),
     })
       .then((res) => res.json())
-      .then((res) => {
-        console.log(res);
+      .then((json) => {
+        console.log(json.alert);
+        if (json.alert) {
+          handleAlertMessage(json.alert);
+        }
       })
       .catch((err) => console.log(err));
   }
+
+ 
 
   const [isToggled, setIsToggled] = useState<boolean>(true);
   const [progress, setProgress] = useState(0);
@@ -41,7 +46,17 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [models, setModels] = useState<any>([]);
   const [selectedModel, setSelectedModel] = useState(getLocalSelectedModel());
-  
+  const [alert, setAlert] = useState<any>();
+  const [isBatch, setIsBatch] = useState<boolean>(false);
+
+  const handleAlertMessage = (message:any) => {
+    if (message) {
+      setAlert(message);
+      setTimeout(() => {
+        setAlert(null);
+      }, 2000);
+    }
+  }
   useEffect(() => {
     selectModel(selectedModel.id);
     localStorage.setItem('selectedModel', selectedModel.toString());
@@ -65,6 +80,9 @@ export default function Home() {
       } else if (json.error) {
         console.log("Error", json.error);
       } else if (json.message) {
+        if (json.message && json.message.type === "alert") {
+          handleAlertMessage(json.message);
+        }
         console.log("Message", json.message);
       } else if (json.connected) {
         console.log("Connected", json.connected);
@@ -103,8 +121,16 @@ export default function Home() {
   };
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-4 bg-black-opactiy-30">
+      
       {/* Side bar */}
       <div className="drawer z-50 fixed top-4 left-4">
+        {
+         alert && 
+         <div role="alert" className={`alert alert-${alert.type} absolute left-0 right-0 mx-auto w-fit`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span dangerouslySetInnerHTML={{ __html: alert.message }}></span>
+         </div>
+        }
         <button
           onClick={handleToggle}
           className="btn btn-circle btn-outline absolute"
@@ -140,15 +166,28 @@ export default function Home() {
         <div className="p-4 w-full">
           <DragAndDrop onUploadResponse={onUploadResponse} />
         </div>
-        <div className="absolute top-1 left-2 right-2 m-2 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-zinc-800/30 lg:p-4 lg:dark:bg-zinc-800/30">
-          <select value={selectedModel.id} onChange={handleSelectChange} className="bg-zinc-800/30 absolute top-1 left-2 right-2 " >
+        <div className="flex w-full justify-center p-4">
+          <select value={selectedModel.id} onChange={handleSelectChange} className="select select-success w-full max-w-xs " >
             <option key={-1} value="-1">Default Model</option>
             {models.map((model: any) => ( <option key={model.id} value={model.id}>{model.name}</option>))}
           </select>
         </div>
+        <div className="m-4 ">
+          <label className="cursor-pointer label">
+          <span className="label-text">Enbale batch process</span> 
+          <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
+          </label>
+          <label className="cursor-pointer label">
+          <span className="label-text">Enbale paches</span> 
+          <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
+          </label>
+          <label className="cursor-pointer label">
+          <span className="label-text">Enbale scale</span> 
+          <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
+          </label>
+        </div>
 
       </div>
-
       {/* main container */}
       <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
         <div className="w-full"></div>
