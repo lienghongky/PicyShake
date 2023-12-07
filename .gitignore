@@ -51,6 +51,8 @@ backend/site_build
 backend/venv
 backend/docs.zip
 backend/archive.zip
+backend/files
+backend/models
 
 # vim temporary files
 backend/*~
