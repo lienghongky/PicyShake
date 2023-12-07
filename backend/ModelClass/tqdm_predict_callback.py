@@ -28,7 +28,7 @@ class TQDMPredictCallback(keras.callbacks.Callback):
             total -= 1
 
         self.tqdm_progress = self.tqdm_cls(total=total, **self.tqdm_params)
-        print(f"\n\ntqdm : {self.tqdm_progress.n} / {self.tqdm_progress.total}")
+        #print(f"\n\ntqdm : {self.tqdm_progress.n} / {self.tqdm_progress.total}")
 
     def on_predict_end(self, logs=None):
         if self.tqdm_progress and not self.custom_tqdm_instance:

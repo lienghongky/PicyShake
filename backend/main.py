@@ -24,6 +24,8 @@ origins = [
     "https://localhost.tiangolo.com",
     "http://localhost",
     "http://localhost:3000",
+    "http://10.125.35.23:3000",
+    "*"
 ]
 
 app.add_middleware(
@@ -98,17 +100,6 @@ def read_item(item_id: int, q: Union[str, None] = None):
     return {"item_id": item_id, "q": q}
 
 
-@app.post("/files/")
-async def create_files(
-    files: Annotated[list[bytes], File(description="Multiple files as bytes")],
-):
-    save_directory = "./files/images"
-    os.makedirs(save_directory, exist_ok=True)
-    
-    file_sizes = []
-    return {"file_sizes": file_sizes}
-
-
 @app.post("/uploadfiles/")
 async def create_upload_files(
     files: Annotated[
@@ -120,14 +111,14 @@ async def create_upload_files(
     filenames = []
     for i, file in enumerate(files):
         current_time = dt.datetime.now().strftime("%Y%m%d%H%M%S%f")
-        file_location = f"files/{current_time}_{i}_{file.filename}"
+        file_location = f"files/inputs/{current_time}_{i}_{file.filename}"
         print(file_location)
         with open(file_location, "wb+") as file_object:
             file_object.write(file.file.read())
         # generate blurhash
         blurhash_str = "rOpGG-oBUNG,qRj2so|=eE1w^n4S5NH"
-                
-        filenames.append({"input":file_location.replace("files/", ""), "blurhash": blurhash_str})
+        basefilename = os.path.basename(file_location)
+        filenames.append({"input":basefilename, "blurhash": blurhash_str})
         # Run denoising process in background thread
         modelThread = threading.Thread(target=denoise_image, args=(file_location,))
         modelThread.start()
@@ -141,8 +132,12 @@ async def handle_models():
 async def select_model(model_id: int):
     model_name = getModels()[model_id]["name"]
     if model_name != inference.model_name:
-        inference.load_model(model_name)
-    return {"message": "loaded"}
+        result = inference.load_model(f"models/{model_name}")
+        if result:
+            return {"alert": {"type": "success", "message": f"Model loaded successfully [<strong>{model_name}</strong>]"}}
+        else:
+            return {"alert": {"type": "error", "message": "Model loading failed"}}
+    return {"alert": {"type": "error", "message": f"No model name {model_name}"}}
 # handle image request
 @app.get("/result/{image_id}")
 async def get_image(image_id: str):
@@ -151,7 +146,7 @@ async def get_image(image_id: str):
 # handle image request
 @app.get("/input/{image_id}")
 async def get_image(image_id: str):
-    image_path = "./files/" + image_id
+    image_path = "./files/inputs/" + image_id
     return FileResponse(image_path)
 # handle image request
 @app.get("/ping")
@@ -172,9 +167,12 @@ async def websocket_endpoint(websocket: WebSocket):
     except:
         await manager.disconnect("0")
 # progress callback function
-async def progress_callback(progress):
-    print(progress)
-    await manager.send_progress(["0"], progress)
+def progress_callback(progress):
+    try:
+        print(progress)
+        threading.Thread(target=asyncio.run(manager.send_progress(["0"], progress))).start()
+    except Exception as e:  
+        print(e)
 # update progress in second model thread
 async def updateProgess():
     while inference.is_in_progress:
@@ -185,8 +183,8 @@ async def updateProgess():
 
 # denoise image and return the denoised image
 def denoise_image(image_path):
-    threading.Thread(target=updateProgess).start()
-    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path)
+    # threading.Thread(target=updateProgess).start()
+    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback)
     # Send the denoised image to the client
     asyncio.run(manager.send_result(["0"], {"url": denoised_image_name, "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
@@ -196,3 +194,4 @@ def getModels():
     for i, filename in enumerate(os.listdir("./models")):
         models.append({"id":i, "name":filename})
     return models
+

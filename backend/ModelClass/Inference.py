@@ -1,12 +1,27 @@
 import tensorflow as tf
 import os
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from ModelClass import RIDNetModel,EAM
+from ModelClass import RIDNetModel,EAM,combined_loss
 from ModelClass.tqdm_predict_callback import TQDMPredictCallback 
+from ModelClass.smooth_tiled_predictions import predict_img_with_smooth_windowing
+from patchify import patchify, unpatchify
+import numpy as np
+#testing purpose
+import matplotlib.pyplot as plt
+from PIL import Image
+from sklearn.preprocessing import MinMaxScaler
+
 
 class Inference:
+    #define Enum for Prediction Mode
+    class PredictionMode:
+      ITERATE = 1
+      BATCH = 2
+      Overlapping = 3
+      SMOOTH = 4
+      
     #initialize the model
-    def __init__(self,model_name='models/model_70k_20.keras',output_dir='./files/outputs',progress_callback=None):
+    def __init__(self,model_name='models/model_90k_20_l1_l2.keras',output_dir='./files/outputs',progress_callback=None):
       self.model_name = model_name
       self.output_dir = output_dir
       self.porgress_callback = progress_callback
@@ -20,10 +35,12 @@ class Inference:
       if gpus:
         try:
             tf.config.experimental.set_memory_growth(gpus[0], True)
-            # Restrict TensorFlow to only allocate 2GB of memory on the first GPU
-            # tf.config.experimental.set_virtual_device_configuration(
-            #     gpus[0],
-            #     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6048)])
+             # Restrict TensorFlow to only allocate 2GB of memory on the first GPU
+            print("Physical GPU:", tf.config.list_physical_devices('GPU'))
+            print(f"GPU Name: {gpu.name}")
+            print(f"Total GPU Memory: {tf.config.experimental.get_memory_info(gpu)['total']} bytes")
+            print(f"Currently Allocated GPU Memory: {tf.config.experimental.get_memory_info(gpu)['currently_allocated']} bytes")
+            print(f"Free GPU Memory: {tf.config.experimental.get_memory_info(gpu)['free']} bytes")
 
             print("Initialized with Physical GPU:", tf.config.list_physical_devices('GPU'))
         except RuntimeError as e:
@@ -32,15 +49,86 @@ class Inference:
 
     #load model
     def load_model(self,model_name=None):
-      if model_name == None:
-        self.model_name = 'models/model_70k_20.keras'
-      self.RIDNet = RIDNetModel
-      self.RIDNet.compile(optimizer=tf.keras.optimizers.Adam(1e-03), loss=tf.keras.losses.MeanSquaredError())
-      self.RIDNet = tf.keras.models.load_model(self.model_name,custom_objects={'EAM':EAM})
-      print("Model Loaded")
+      if model_name is not None:
+        self.model_name = model_name 
+      try:
+        self.RIDNet = RIDNetModel
+        # self.RIDNet.compile(optimizer=tf.keras.optimizers.Adam(1e-03), loss=tf.keras.losses.MeanSquaredError())
+        #self.RIDNet.compile(optimizer=tf.keras.optimizers.Adam(1e-03), loss=combined_loss)
+        print(f"Loading Model: {self.model_name}")
+        self.RIDNet = tf.keras.models.load_model(self.model_name,custom_objects={'EAM':EAM,'combined_loss':combined_loss})
+        print("Model Loaded")
+        return True
+      except Exception as e:
+        print("An error occurred:", str(e))
+        return False
 
+    def predict(self, image_path, progress_callback=None, mode=PredictionMode.ITERATE):
+      
+      #switch case for prediction mode
+      if mode == self.PredictionMode.SMOOTH:
+        return self.predictSmooth(image_path, progress_callback)
+      elif mode == self.PredictionMode.BATCH:
+        return self.predictBatch(image_path, progress_callback)
+      elif mode == self.PredictionMode.ITERATE:
+        return self.predictIterate(image_path, progress_callback)
+      else:
+        return self.predictSmooth(image_path, progress_callback)
+      
     #predict
-    def predict(self, image_path, progress_callback=None):
+    def predictSmooth(self, image_path, progress_callback=None):
+      self.is_in_progress = True
+      self.progress = 0.0
+      if progress_callback is None:
+        progress_callback = self.porgress_callback
+      print(image_path)
+      # try:
+      # Load the noisy image
+      noisy_image = img_to_array(load_img(image_path))/255.0
+      # Set the patch size
+      patch_size = (256, 256, 3) 
+      # check if image is smaller than patch size
+      target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
+      target_width = ((noisy_image.shape[1] - 1) // patch_size[1] + 1) * patch_size[1]
+      scaler = MinMaxScaler()
+      input_img = scaler.fit_transform(noisy_image.reshape(-1, noisy_image.shape[-1])).reshape(noisy_image.shape)
+      def pred_func(img_batch_subdiv):
+        return self.RIDNet.predict(img_batch_subdiv.astype(np.uint8),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])
+      predictions_smooth = predict_img_with_smooth_windowing(
+        input_img, 
+        window_size=256, 
+        subdivisions=2,
+        nb_classes=3,
+        pred_func = pred_func
+      )
+      
+      denoised_image = predictions_smooth*255.0
+      #save denoised image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
+      #crop image to original size
+      denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+      #save cropped image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
+      # convert to double 
+
+
+      # Get the denoised image using the model
+      denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
+      save_path = os.path.join(self.output_dir, denoised_image_name)
+      # Save denoised image
+      tf.keras.preprocessing.image.save_img(save_path, tf.cast(denoised_image, tf.uint8))
+
+      # Call the progress callback if provided
+      if progress_callback is not None:
+        progress_callback(1.0)  # Indicate completion
+      self.is_in_progress = False
+      return denoised_image_name, save_path, (0, 0)
+      # except Exception as e:
+      #   print("An error occurred:", str(e))
+      #   self.is_in_progress = False
+      #   return None, None, None
+    #predict
+    def predictBatch(self, image_path, progress_callback=None):
       self.is_in_progress = True
       self.progress = 0.0
       if progress_callback is None:
@@ -48,31 +136,61 @@ class Inference:
       print(image_path)
       try:
         # Load the noisy image
-        noisy_image = img_to_array(load_img(image_path,target_size=(256, 256))) / 255.0
-        # slice image into 256x256 patches and reconstruct the image back
-        # noisy_image = tf.image.extract_patches(images=tf.expand_dims(noisy_image, axis=0), sizes=[1, 256, 256, 1], strides=[1, 256, 256, 1], rates=[1, 1, 1, 1], padding='VALID').numpy()[0]
-        # noisy_image = tf.image.resize(noisy_image, size=(256, 256), method='bicubic', preserve_aspect_ratio=False, antialias=False, name=None).numpy()
+        noisy_image = img_to_array(load_img(image_path))
+        # Set the patch size
+        patch_size = (256, 256, 3) 
+        # check if image is smaller than patch size
+        target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
+        target_width = ((noisy_image.shape[1] - 1) // patch_size[1] + 1) * patch_size[1]
+        print(target_height,target_width)
+        # Create a new padded image
+        padded_image = np.zeros((target_height, target_width, noisy_image.shape[2]), dtype=noisy_image.dtype)
+        # pad with reflect
+        padded_image = np.pad(noisy_image, ((0, target_height - noisy_image.shape[0]), (0, target_width - noisy_image.shape[1]), (0, 0)), mode='reflect')
 
+          
+        Image.fromarray(padded_image.astype(np.uint8)).save('files/debugs/padded_image.png')
+
+        # slice image into 256x256 patches and reconstruct the image back
+        patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
+        print(patches.shape)
+        self.display_patches(patches)
+      
         print(f"Predicting with [{self.model_name}]")
         # Get the denoised image using the model
-        denoised_image = self.RIDNet.predict(tf.expand_dims(noisy_image, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
+        denoised_patches = patches
+        noisy_patches = []
+        for i in range(patches.shape[0]):
+          for j in range(patches.shape[1]):
+              single_patch_img = patches[i, j, :, :, :][0]
+              single_patch_img = single_patch_img / 255.0
+              # single_patch_img = tf.expand_dims(single_patch_img, axis=0)
+              noisy_patches.append(single_patch_img)
+
+        noisy_patches = np.array(noisy_patches) 
+        print(noisy_patches[0].shape)
+        output_patches = self.RIDNet.predict(noisy_patches,callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])
+
+        for i in range(denoised_patches.shape[0]):
+          for j in range(denoised_patches.shape[1]):
+            
+              denoised_output_patche = output_patches[i*denoised_patches.shape[1]+j]
+              denoised_output_patche = denoised_output_patche.clip(0, 1) 
+              denoised_output_patche = denoised_output_patche * 255.0
+              denoised_patches[i, j, :, :, :] = denoised_output_patche
+              Image.fromarray((denoised_output_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
         
-        # get the color image
-        denoised_image = denoised_image * 255.0
-        noisy_image = noisy_image * 255.0
+        denoised_image = unpatchify(denoised_patches, padded_image.shape) 
+        #save denoised image to debugs
+        Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
+        #crop image to original size
+        denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+        #save cropped image to debugs
+        Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
+        # convert to double 
+ 
 
-        # Calculate PSNR and SSIM
-        psnr = tf.image.psnr(denoised_image, noisy_image, max_val=255).numpy()
-        ssim = tf.image.ssim(denoised_image, noisy_image, max_val=255, filter_size=11, filter_sigma=1.5, k1=0.01,
-                   k2=0.03).numpy()
-
-        print("PSNR:", psnr)
-        print("SSIM:", ssim)
-
-      
-        #resize image back to original size noising image size
-        denoised_image = tf.image.resize(denoised_image, size=(noisy_image.shape[0], noisy_image.shape[1]), method='bicubic', preserve_aspect_ratio=False, antialias=False, name=None).numpy()
-        # Get the name of the denoised image
+        # Get the denoised image using the model
         denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
         save_path = os.path.join(self.output_dir, denoised_image_name)
         # Save denoised image
@@ -82,13 +200,117 @@ class Inference:
         if progress_callback is not None:
           progress_callback(1.0)  # Indicate completion
         self.is_in_progress = False
-        return denoised_image_name, save_path, (psnr, ssim)
+        return denoised_image_name, save_path, (0, 0)
       except Exception as e:
         print("An error occurred:", str(e))
         self.is_in_progress = False
         return None, None, None
+    #predict
+    def predictIterate(self, image_path, progress_callback=None):
+      self.is_in_progress = True
+      self.progress = 0.0
+      if progress_callback is None:
+        progress_callback = self.porgress_callback
+      print(image_path)
+      # try:
+      # Load the noisy image
+      #noisy_image = img_to_array(load_img(image_path,target_size=(256, 256))) / 255.0
+      noisy_image = img_to_array(load_img(image_path))
+      # Set the patch size
+      patch_size = (256, 256, 3)  # Assuming a 3-channel image, adjust as needed
+      # check if image is smaller than patch size
+      # Pad the image to make it divisible by the patch size
+      target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
+      target_width = ((noisy_image.shape[1] - 1) // patch_size[1] + 1) * patch_size[1]
+      print(target_height,target_width)
+      # Create a new padded image
+      padded_image = np.zeros((target_height, target_width, noisy_image.shape[2]), dtype=noisy_image.dtype)
+      # pad with reflect
+      padded_image = np.pad(noisy_image, ((0, target_height - noisy_image.shape[0]), (0, target_width - noisy_image.shape[1]), (0, 0)), mode='reflect')
+
+        
+      Image.fromarray(padded_image.astype(np.uint8)).save('files/debugs/padded_image.png')
+
+      # slice image into 256x256 patches and reconstruct the image back
+      patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
+      print(patches.shape)
+      self.display_patches(patches)
+    
+      print(f"Predicting with [{self.model_name}]")
+      # Get the denoised image using the model
+      denoised_patches = patches
+      step = 0
+      for i in range(patches.shape[0]):
+        for j in range(patches.shape[1]):
+            single_patch_img = patches[i, j, :, :, :][0]
+            single_patch_img = single_patch_img / 255.0
+            denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
+            denoised_patche = denoised_patche.clip(0, 1)
+            denoised_patche = denoised_patche * 255.0
+            denoised_patches[i, j, :, :, :] = denoised_patche
+            Image.fromarray((denoised_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
+            step += 1
+            progress_callback(step/(patches.shape[0]*patches.shape[1]))
+      
+      denoised_image = unpatchify(denoised_patches, padded_image.shape) 
+      #save denoised image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
+      #crop image to original size
+      denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+      #save cropped image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
+      # convert to double 
 
 
+      # Calculate PSNR and SSIM
+      # psnr = tf.image.psnr(denoised_image, noisy_image, max_val=255).numpy()
+      # ssim = tf.image.ssim(denoised_image, noisy_image, max_val=255, filter_size=11, filter_sigma=1.5, k1=0.01,
+      #            k2=0.03).numpy()
+
+      # print("PSNR:", psnr)
+      # print("SSIM:", ssim)
+
+    
+      # Get the denoised image using the model
+      denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
+      save_path = os.path.join(self.output_dir, denoised_image_name)
+      # Save denoised image
+      tf.keras.preprocessing.image.save_img(save_path, tf.cast(denoised_image, tf.uint8))
+
+      # Call the progress callback if provided
+      if progress_callback is not None:
+        progress_callback(1.0)  # Indicate completion
+      self.is_in_progress = False
+      return denoised_image_name, save_path, (0, 0)
+      # except Exception as e:
+      #   print("An error occurred:", str(e))
+      #   self.is_in_progress = False
+      #   return None, None, None
+
+    #display patches of images in a grid
+    def display_patches(self, patches):
+      try:
+        fig, axs = plt.subplots(patches.shape[0], patches.shape[1], figsize=(patches.shape[1], patches.shape[0]))
+        if patches.shape[0] == 1 and patches.shape[1] == 1:
+          #add extra dimension for single patch image
+          axs = np.array([axs])
+        axs = axs.reshape(1,1)
+        print(axs.shape)
+        for i in range(patches.shape[0]):
+            for j in range(patches.shape[1]):
+                single_patch_img = patches[i, j,0, :, :, :]
+                axs[i, j].imshow(single_patch_img)
+                axs[i, j].axis('off')
+                axs[i, j].set_aspect('equal')
+
+        plt.subplots_adjust(wspace=0.04, hspace=0.02)  # adjust the space between images
+        plt.tight_layout()
+        plt.savefig('files/debugs/all_patches.png')
+      except Exception as e:
+        print("An error occurred:", str(e))
+        print("Error in displaying patches")
+        pass
+      
     #Calculate PSNR and SSIM
     def calculate_average_pnsr_ssim(self,validation_image_paths):
 

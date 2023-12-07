@@ -83,4 +83,17 @@ ridnet = RIDNet()
 model = ridnet.call()
 RIDNetModel = Model(ridnet.input_layer, model)
 
+# 90k_20_loss_l1_l2
+# Define the loss function
+def combined_loss(y_true, y_pred):
+    # Compute the L1 loss
+    l1_loss = tf.reduce_mean(tf.abs(y_true - y_pred))
 
+    # Compute the L2 loss
+    l2_loss = tf.reduce_mean(tf.square(y_true - y_pred))
+
+    # Combine the L1 and L2 losses
+    combined = l1_loss + l2_loss
+
+
+    return combined
