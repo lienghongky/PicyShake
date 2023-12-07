@@ -15,9 +15,11 @@ from sklearn.preprocessing import MinMaxScaler
 class Inference:
     #define Enum for Prediction Mode
     class PredictionMode:
-      SMOOTH = 1
+      ITERATE = 1
       BATCH = 2
-      ITERATE = 3
+      Overlapping = 3
+      SMOOTH = 4
+      
     #initialize the model
     def __init__(self,model_name='models/model_90k_20_l1_l2.keras',output_dir='./files/outputs',progress_callback=None):
       self.model_name = model_name
@@ -210,96 +212,104 @@ class Inference:
       if progress_callback is None:
         progress_callback = self.porgress_callback
       print(image_path)
-      try:
-        # Load the noisy image
-        #noisy_image = img_to_array(load_img(image_path,target_size=(256, 256))) / 255.0
-        noisy_image = img_to_array(load_img(image_path))
-        # Set the patch size
-        patch_size = (256, 256, 3)  # Assuming a 3-channel image, adjust as needed
-        # check if image is smaller than patch size
-        # Pad the image to make it divisible by the patch size
-        target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
-        target_width = ((noisy_image.shape[1] - 1) // patch_size[1] + 1) * patch_size[1]
-        print(target_height,target_width)
-        # Create a new padded image
-        padded_image = np.zeros((target_height, target_width, noisy_image.shape[2]), dtype=noisy_image.dtype)
-        # pad with reflect
-        padded_image = np.pad(noisy_image, ((0, target_height - noisy_image.shape[0]), (0, target_width - noisy_image.shape[1]), (0, 0)), mode='reflect')
+      # try:
+      # Load the noisy image
+      #noisy_image = img_to_array(load_img(image_path,target_size=(256, 256))) / 255.0
+      noisy_image = img_to_array(load_img(image_path))
+      # Set the patch size
+      patch_size = (256, 256, 3)  # Assuming a 3-channel image, adjust as needed
+      # check if image is smaller than patch size
+      # Pad the image to make it divisible by the patch size
+      target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
+      target_width = ((noisy_image.shape[1] - 1) // patch_size[1] + 1) * patch_size[1]
+      print(target_height,target_width)
+      # Create a new padded image
+      padded_image = np.zeros((target_height, target_width, noisy_image.shape[2]), dtype=noisy_image.dtype)
+      # pad with reflect
+      padded_image = np.pad(noisy_image, ((0, target_height - noisy_image.shape[0]), (0, target_width - noisy_image.shape[1]), (0, 0)), mode='reflect')
 
-          
-        Image.fromarray(padded_image.astype(np.uint8)).save('files/debugs/padded_image.png')
-
-        # slice image into 256x256 patches and reconstruct the image back
-        patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
-        print(patches.shape)
-        self.display_patches(patches)
-      
-        print(f"Predicting with [{self.model_name}]")
-        # Get the denoised image using the model
-        denoised_patches = patches
-        for i in range(patches.shape[0]):
-          for j in range(patches.shape[1]):
-              single_patch_img = patches[i, j, :, :, :][0]
-              single_patch_img = single_patch_img / 255.0
-              denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
-              denoised_patche = denoised_patche.clip(0, 1)
-              denoised_patche = denoised_patche * 255.0
-              denoised_patches[i, j, :, :, :] = denoised_patche
-              Image.fromarray((denoised_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
         
-        denoised_image = unpatchify(denoised_patches, padded_image.shape) 
-        #save denoised image to debugs
-        Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
-        #crop image to original size
-        denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
-        #save cropped image to debugs
-        Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
-        # convert to double 
- 
+      Image.fromarray(padded_image.astype(np.uint8)).save('files/debugs/padded_image.png')
 
-        # Calculate PSNR and SSIM
-        # psnr = tf.image.psnr(denoised_image, noisy_image, max_val=255).numpy()
-        # ssim = tf.image.ssim(denoised_image, noisy_image, max_val=255, filter_size=11, filter_sigma=1.5, k1=0.01,
-        #            k2=0.03).numpy()
-
-        # print("PSNR:", psnr)
-        # print("SSIM:", ssim)
-
+      # slice image into 256x256 patches and reconstruct the image back
+      patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
+      print(patches.shape)
+      self.display_patches(patches)
+    
+      print(f"Predicting with [{self.model_name}]")
+      # Get the denoised image using the model
+      denoised_patches = patches
+      step = 0
+      for i in range(patches.shape[0]):
+        for j in range(patches.shape[1]):
+            single_patch_img = patches[i, j, :, :, :][0]
+            single_patch_img = single_patch_img / 255.0
+            denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
+            denoised_patche = denoised_patche.clip(0, 1)
+            denoised_patche = denoised_patche * 255.0
+            denoised_patches[i, j, :, :, :] = denoised_patche
+            Image.fromarray((denoised_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
+            step += 1
+            progress_callback(step/(patches.shape[0]*patches.shape[1]))
       
-        # Get the denoised image using the model
-        denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
-        save_path = os.path.join(self.output_dir, denoised_image_name)
-        # Save denoised image
-        tf.keras.preprocessing.image.save_img(save_path, tf.cast(denoised_image, tf.uint8))
+      denoised_image = unpatchify(denoised_patches, padded_image.shape) 
+      #save denoised image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
+      #crop image to original size
+      denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+      #save cropped image to debugs
+      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
+      # convert to double 
 
-        # Call the progress callback if provided
-        if progress_callback is not None:
-          progress_callback(1.0)  # Indicate completion
-        self.is_in_progress = False
-        return denoised_image_name, save_path, (0, 0)
-      except Exception as e:
-        print("An error occurred:", str(e))
-        self.is_in_progress = False
-        return None, None, None
+
+      # Calculate PSNR and SSIM
+      # psnr = tf.image.psnr(denoised_image, noisy_image, max_val=255).numpy()
+      # ssim = tf.image.ssim(denoised_image, noisy_image, max_val=255, filter_size=11, filter_sigma=1.5, k1=0.01,
+      #            k2=0.03).numpy()
+
+      # print("PSNR:", psnr)
+      # print("SSIM:", ssim)
+
+    
+      # Get the denoised image using the model
+      denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
+      save_path = os.path.join(self.output_dir, denoised_image_name)
+      # Save denoised image
+      tf.keras.preprocessing.image.save_img(save_path, tf.cast(denoised_image, tf.uint8))
+
+      # Call the progress callback if provided
+      if progress_callback is not None:
+        progress_callback(1.0)  # Indicate completion
+      self.is_in_progress = False
+      return denoised_image_name, save_path, (0, 0)
+      # except Exception as e:
+      #   print("An error occurred:", str(e))
+      #   self.is_in_progress = False
+      #   return None, None, None
 
     #display patches of images in a grid
     def display_patches(self, patches):
-      fig, axs = plt.subplots(patches.shape[0], patches.shape[1], figsize=(patches.shape[1], patches.shape[0]))
-      
-      if patches.shape[0] == 1 and patches.shape[1] == 1:
-        #add extra dimension for single patch image
-        axs = np.array([axs])
+      try:
+        fig, axs = plt.subplots(patches.shape[0], patches.shape[1], figsize=(patches.shape[1], patches.shape[0]))
+        if patches.shape[0] == 1 and patches.shape[1] == 1:
+          #add extra dimension for single patch image
+          axs = np.array([axs])
         axs = axs.reshape(1,1)
-      for i in range(patches.shape[0]):
-          for j in range(patches.shape[1]):
-              single_patch_img = patches[i, j,0, :, :, :]
-              axs[i, j].imshow(single_patch_img)
-              axs[i, j].axis('off')
-              axs[i, j].set_aspect('equal')
+        print(axs.shape)
+        for i in range(patches.shape[0]):
+            for j in range(patches.shape[1]):
+                single_patch_img = patches[i, j,0, :, :, :]
+                axs[i, j].imshow(single_patch_img)
+                axs[i, j].axis('off')
+                axs[i, j].set_aspect('equal')
 
-      plt.subplots_adjust(wspace=0.04, hspace=0.02)  # adjust the space between images
-      plt.tight_layout()
-      plt.savefig('files/debugs/all_patches.png')
+        plt.subplots_adjust(wspace=0.04, hspace=0.02)  # adjust the space between images
+        plt.tight_layout()
+        plt.savefig('files/debugs/all_patches.png')
+      except Exception as e:
+        print("An error occurred:", str(e))
+        print("Error in displaying patches")
+        pass
       
     #Calculate PSNR and SSIM
     def calculate_average_pnsr_ssim(self,validation_image_paths):

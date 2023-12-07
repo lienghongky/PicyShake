@@ -1,11 +1,12 @@
 "use client";
+import { on } from "events";
 import { use, useRef, useState,useEffect } from "react";
 
 export interface DragAndDropProps {
-  onUploadResponse?: (response: any) => void;
+  onFileSubmit?: (files: []) => void;
 }
 
-export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
+export default function DragAndDrop({ onFileSubmit }: DragAndDropProps) {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const inputRef = useRef<any>(null);
   const [files, setFiles] = useState<any>([]);
@@ -42,25 +43,7 @@ export default function DragAndDrop({ onUploadResponse }: DragAndDropProps) {
   }
 
   function handleSubmitFile(e: any) {
-    if (files.length === 0) {
-      // no file has been submitted
-    } else {
-      // upload the files to the server path: /files
-      const formData = new FormData();
-      files.forEach((file: any) => {
-        formData.append("files", file);
-      });
-      fetch("http://localhost:8000/uploadfiles", {
-        method: "POST",
-        body: formData,
-      })
-        .then((res) => res.json())
-        .then((res) => {
-          onUploadResponse && onUploadResponse(res);
-          setFiles([]);
-        })
-        .catch((err) => console.log(err));
-    }
+    onFileSubmit && onFileSubmit(files);
   }
 
   function handleDrop(e: any) {

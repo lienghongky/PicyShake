@@ -24,6 +24,8 @@ origins = [
     "https://localhost.tiangolo.com",
     "http://localhost",
     "http://localhost:3000",
+    "http://10.125.35.23:3000",
+    "*"
 ]
 
 app.add_middleware(
@@ -165,9 +167,12 @@ async def websocket_endpoint(websocket: WebSocket):
     except:
         await manager.disconnect("0")
 # progress callback function
-async def progress_callback(progress):
-    print(progress)
-    await manager.send_progress(["0"], progress)
+def progress_callback(progress):
+    try:
+        print(progress)
+        threading.Thread(target=asyncio.run(manager.send_progress(["0"], progress))).start()
+    except Exception as e:  
+        print(e)
 # update progress in second model thread
 async def updateProgess():
     while inference.is_in_progress:
@@ -178,8 +183,8 @@ async def updateProgess():
 
 # denoise image and return the denoised image
 def denoise_image(image_path):
-    threading.Thread(target=updateProgess).start()
-    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,mode=Inference.PredictionMode.ITERATE )
+    # threading.Thread(target=updateProgess).start()
+    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback)
     # Send the denoised image to the client
     asyncio.run(manager.send_result(["0"], {"url": denoised_image_name, "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
