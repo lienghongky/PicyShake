@@ -309,8 +309,9 @@ const ZOOM_LEVEL = 2.5;
           <span className="label-text">Save Patches</span> 
           <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
           </label>
+         
           <label className="cursor-pointer label">
-          <span className="label-text">Enbale upscale scale</span> 
+          <span className="label-text">Enbale up-scale</span> 
           <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
           </label>
         </div>
@@ -410,12 +411,12 @@ const ZOOM_LEVEL = 2.5;
                         backgroundRepeat: 'no-repeat',
                         display: isMagnify ? zoomable ? 'block' : 'none' : 'none',
                         top: `${position.mouseY}px`,
-                        left: `${position.mouseX+(MAGNIFIER_SIZE * (position.mouseX > imageSize.width-2* ? -2 : 1))}px`,
+                        left: `${position.mouseX+(MAGNIFIER_SIZE * (position.mouseX > imageSize.width-2*MAGNIFIER_SIZE ? -1 : 1))}px`,
                         width: `${MAGNIFIER_SIZE}px`,
                         height: `${MAGNIFIER_SIZE}px`,
                         
                     }}
-                    className={`z-50 border-2 pointer-events-none absolute border-teal-200`}
+                    className={`z-50 border-2 pointer-events-none absolute border-green-500`}
                 />
             </div>
           </div>
