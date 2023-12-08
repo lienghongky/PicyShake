@@ -23,6 +23,46 @@ export default function Home() {
   }
 
   
+ // Constants for magnifier size and zoom level
+const MAGNIFIER_SIZE = 100;
+const ZOOM_LEVEL = 2.5;
+
+// ImageEffect component
+
+    // State variables
+    const [zoomable, setZoomable] = useState(true);
+    const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+    const [position, setPosition] = useState({ x: 100, y: 100, mouseX: 0, mouseY: 0 });
+
+    // Event handlers
+    const handleMouseEnter = (e: MouseEvent) => {
+        let element = e.currentTarget;
+        let { width, height } = element.getBoundingClientRect();
+        setImageSize({ width, height });
+        setZoomable(true);
+        updatePosition(e);
+    };
+
+    const handleMouseLeave = (e: MouseEvent) => {
+        setZoomable(false);
+        updatePosition(e);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+        updatePosition(e);
+    };
+
+    const updatePosition = (e: MouseEvent) => {
+        const { left, top } = e.currentTarget.getBoundingClientRect();
+        let x = e.clientX - left;
+        let y = e.clientY - top;
+        setPosition({
+            x: -x * ZOOM_LEVEL + (MAGNIFIER_SIZE / 2),
+            y: -y * ZOOM_LEVEL + (MAGNIFIER_SIZE / 2),
+            mouseX: x - (MAGNIFIER_SIZE / 2),
+            mouseY: y - (MAGNIFIER_SIZE / 2),
+        });
+    };
 
  
   const [baseURL, setBaseURL] = useState<string>("http://localhost:8000");
@@ -39,7 +79,7 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState<boolean|null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<string>("4/3");
   const [zoom, setZoom] = useState<number>(50);
-
+  const [isMagnify, setIsMagnify] = useState<boolean>(false);
   const handleAlertMessage = (message:any) => {
     if (message) {
       setAlert(message);
@@ -160,8 +200,7 @@ export default function Home() {
   };
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-4 bg-black-opactiy-30">
-      
-      
+      {/* Drawer */}
       <div className="drawer z-50 fixed top-4 left-4">
         {
 
@@ -207,11 +246,30 @@ export default function Home() {
           isToggled ? "block translate-x-0" : " -translate-x-full"
         }`}
       >
-        <div className="fixed -right-40 -mb-8 w-64 transform rotate-180 translate-y-64  ">
+        <div className="fixed -right-48 -mb-8 w-80 transform rotate-180 translate-y-64  ">
           <div className="flex items-center justify-center transform rotate-90 ">
           <strong>- </strong>
-            <input type="range" min={0} max="70" value={zoom} onChange={e=>setZoom(parseInt(e.target.value))}  className="w-64 bg-gray-700 range range-primary " />
+            <input type="range" min={0} max="100" value={zoom} onChange={e=>setZoom(parseInt(e.target.value))}  className="w-64 bg-gray-700 range range-primary " />
           <strong> +</strong>
+          <div className="px-4">
+          <button className={`btn btn-primary btn-circle  magnify ${isMagnify ? '' : 'btn-outline'}`} onClick={() => setIsMagnify(!isMagnify)}>
+            <svg
+              className="h-6 w-6"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4ZM12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18Z"
+                fill="currentColor"
+              />
+              <path
+                d="M12 8C10.3431 8 9 9.34315 9 11C9 12.6569 10.3431 14 12 14C13.6569 14 15 12.6569 15 11C15 9.34315 13.6569 8 12 8ZM12 12C11.4477 12 11 11.5523 11 11C11 10.4477 11.4477 10 12 10C12.5523 10 13 10.4477 13 11C13 11.5523 12.5523 12 12 12Z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+          </div>
           </div>
         </div>
         <div className="p-4 w-full">
@@ -260,7 +318,6 @@ export default function Home() {
           <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
           </label>
         </div>
-
       </div>
       {/* main container */}
       <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
@@ -301,8 +358,13 @@ export default function Home() {
       <div style={  {["margin-left" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} className={"w-full flex justify-center items-center"}>
         <div style={{["width" as any]:`${zoom}%`}} className={`max-w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100`}>
         
-          <div className="">
-            <div className={`diff aspect-[${imageAspectRatio}]`} style={{["aspect-ratio" as any]:`${imageAspectRatio}`}}>
+          <div className={isMagnify ? 'cursor-none': 'cursor-pointer'}>
+            <div className={`diff aspect-[${imageAspectRatio}]`} style={{["aspect-ratio" as any]:`${imageAspectRatio}`}}
+            onMouseLeave={handleMouseLeave}
+            onMouseEnter={handleMouseEnter}
+            onMouseMove={handleMouseMove}
+            >
+              
               <div className="diff-item-1">
                 <img
                   className={isLoaded ? "" : "blur-lg"}
@@ -329,7 +391,36 @@ export default function Home() {
                   }}
                   />
               </div>
-              <div className="diff-resizer"></div>
+              <div className="diff-resizer cursor-col-resize"></div>
+              <div
+                    style={{
+                        backgroundPosition: `${position.x}px ${position.y}px`,
+                        backgroundImage: `url(${inputImage})`,
+                        backgroundSize: `${imageSize.width * ZOOM_LEVEL}px ${imageSize.height * ZOOM_LEVEL}px`,
+                        backgroundRepeat: 'no-repeat',
+                        display: isMagnify ? zoomable ? 'block' : 'none' : 'none',
+                        top: `${position.mouseY}px`,
+                        left: `${position.mouseX}px`,
+                        width: `${MAGNIFIER_SIZE}px`,
+                        height: `${MAGNIFIER_SIZE}px`,
+                    }}
+                    className={`z-50 border pointer-events-none absolute border-gray-500`}
+                />
+                <div
+                    style={{
+                        backgroundPosition: `${position.x}px ${position.y}px`,
+                        backgroundImage: `url(${outputImage})`,
+                        backgroundSize: `${imageSize.width * ZOOM_LEVEL}px ${imageSize.height * ZOOM_LEVEL}px`,
+                        backgroundRepeat: 'no-repeat',
+                        display: isMagnify ? zoomable ? 'block' : 'none' : 'none',
+                        top: `${position.mouseY}px`,
+                        left: `${position.mouseX+(MAGNIFIER_SIZE * (position.mouseX > imageSize.width-2*MAGNIFIER_SIZE ? -1 : 1))}px`,
+                        width: `${MAGNIFIER_SIZE}px`,
+                        height: `${MAGNIFIER_SIZE}px`,
+                        
+                    }}
+                    className={`z-50 border-2 pointer-events-none absolute border-green-500`}
+                />
             </div>
           </div>
           

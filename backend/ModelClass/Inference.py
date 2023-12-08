@@ -234,7 +234,7 @@ class Inference:
       # slice image into 256x256 patches and reconstruct the image back
       patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
       print(patches.shape)
-      self.display_patches(patches)
+      # self.display_patches(patches)
     
       print(f"Predicting with [{self.model_name}]")
       # Get the denoised image using the model
