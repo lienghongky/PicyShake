@@ -139,9 +139,9 @@ async def select_model(model_id: int):
             return {"alert": {"type": "error", "message": "Model loading failed"}}
     return {"alert": {"type": "error", "message": f"No model name {model_name}"}}
 # handle image request
-@app.get("/result/{image_id}")
-async def get_image(image_id: str):
-    image_path = inference.output_dir + "/" + image_id
+@app.get("/result/{image_id}/{result_type}")
+async def get_image(image_id: str, result_type: str):
+    image_path = inference.output_dir + "/" + image_id + f"/{result_type}"
     return FileResponse(image_path)
 # handle image request
 @app.get("/input/{image_id}")
@@ -186,7 +186,7 @@ def denoise_image(image_path):
     # threading.Thread(target=updateProgess).start()
     denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback)
     # Send the denoised image to the client
-    asyncio.run(manager.send_result(["0"], {"url": denoised_image_name, "psnr": float(psnr), "ssim": float(ssim)}))
+    asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
 
 def getModels():
