@@ -3,9 +3,10 @@ import Image from "next/image";
 import DragAndDrop from "./dragdrop/page";
 import { useState, useEffect } from "react";
 import { json } from "stream/consumers";
+import { getIpAddress, getServerSideProps } from "@/hoc/withIpaddress";
 
-export default function Home() {
 
+ function Home({ipAddress}: {ipAddress: string}) {
   const getLocalSelectedModel = () => {
     if (typeof window !== 'undefined') {
       const selectedModel = window.localStorage.getItem('selectedModel');
@@ -24,8 +25,8 @@ export default function Home() {
 
   
  // Constants for magnifier size and zoom level
-const MAGNIFIER_SIZE = 100;
-const ZOOM_LEVEL = 2.5;
+    const MAGNIFIER_SIZE = 120;
+    const ZOOM_LEVEL = 2.5;
 
 // ImageEffect component
 
@@ -80,6 +81,8 @@ const ZOOM_LEVEL = 2.5;
   const [imageAspectRatio, setImageAspectRatio] = useState<string>("4/3");
   const [zoom, setZoom] = useState<number>(50);
   const [isMagnify, setIsMagnify] = useState<boolean>(false);
+  const [customBaseURL, setCustomBaseURL] = useState<string>("http://");
+
   const handleAlertMessage = (message:any) => {
     if (message) {
       setAlert(message);
@@ -113,44 +116,50 @@ const ZOOM_LEVEL = 2.5;
   
   useEffect(() => {
     getModels();
-    const ws = new WebSocket(`${baseURL.replace("http","ws")}/ws`);
-    // onconnected 
-    ws.onopen = () => {
-      console.log("connected");
-      setIsConnected(true);
-    };
-    // onclose
-    ws.onclose = () => {
-      console.log("disconnected");
-      setIsConnected(false);
-    };
-    ws.onmessage = (event) => {
-      console.log(event.data);
-      var json = JSON.parse(event.data);
-      if (json.progress) {
-        console.log("Progress", json.progress);
-        setProgress(Math.round(parseFloat(json.progress) * 100));
-      } else if (json.result) {
-        console.log("Result", json.result);
-        setOutputImage(`${baseURL}/result/${json.result.url}`);
-        setIsLoaded(true);
-      } else if (json.error) {
-        console.log("Error", json.error);
-      } else if (json.message) {
-        if (json.message && json.message.type === "alert") {
-          handleAlertMessage(json.message);
+    const connect = () => {
+      const ws = new WebSocket(`${baseURL.replace("http","ws")}/ws`);
+      
+      // onconnected 
+      ws.onopen = () => {
+        console.log("connected");
+        setIsConnected(true);
+      };
+      // onclose
+      ws.onclose = () => {
+        console.log("disconnected");
+        setIsConnected(false);
+        // try to reconnect in 5 seconds
+        setTimeout(connect, 2000);
+      };
+      ws.onmessage = (event) => {
+        console.log(event.data);
+        var json = JSON.parse(event.data);
+        if (json.progress) {
+          console.log("Progress", json.progress);
+          setProgress(Math.round(parseFloat(json.progress) * 100));
+        } else if (json.result) {
+          console.log("Result", json.result);
+          setOutputImage(`${baseURL}/result/${json.result.url}`);
+          setIsLoaded(true);
+        } else if (json.error) {
+          console.log("Error", json.error);
+        } else if (json.message) {
+          if (json.message && json.message.type === "alert") {
+            handleAlertMessage(json.message);
+          }
+          console.log("Message", json.message);
+        } else if (json.connected) {
+          console.log("Connected", json.connected);
+        } else {
+          console.log("Unknown", json);
         }
-        console.log("Message", json.message);
-      } else if (json.connected) {
-        console.log("Connected", json.connected);
-      } else {
-        console.log("Unknown", json);
-      }
-    };
+      };
 
-    return () => {
-      ws.close();
-    };
+      return () => {
+        ws.close();
+      };
+    }
+    connect();
   }, [baseURL]);
   const handleToggle = () => {
     setIsToggled(!isToggled);
@@ -297,7 +306,7 @@ const ZOOM_LEVEL = 2.5;
             <span className="label-text">Denois Mode</span>
           </div>
           <select className="select select-bordered">
-            <option disabled selected>Default</option>
+            <option disabled value={-1}>Default</option>
             <option value={1}>Iterate</option>
             <option value={2}>Batch</option>
             <option value={3}>Overlapping</option>
@@ -319,10 +328,13 @@ const ZOOM_LEVEL = 2.5;
       {/* main container */}
       <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
         <div className="w-full px-4">
-        <select value={baseURL} onChange={(e)=>setBaseURL(e.target.value)} className="select select-primary select-sm  max-w-xs " >
+            <select value={baseURL} onChange={(e)=>setBaseURL(e.target.value)} className="select select-primary select-sm max-w-xs " >
+            
             <option key={0} value="http://localhost:8000">http://localhost:8000</option>
             <option key={1} value="http://10.125.35.23:8000">http://10.125.35.23:8000</option>
+            <option key={2} value={customBaseURL}>{customBaseURL}</option>
           </select>
+          <input type="text" placeholder="Type here" className="ml-2 input input-bordered input-sm input-primary  max-w-xs" value={customBaseURL} onChange={(e)=>setCustomBaseURL(e.target.value)} />
         </div>
 
         <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
@@ -350,13 +362,11 @@ const ZOOM_LEVEL = 2.5;
           <span className={`relative inline-flex rounded-full h-3 w-3 ${isConnected == null ? "bg-amber-600" : isConnected ? "bg-green-600":"bg-red-600"}`}></span>
         </span>
       </div>
-    
-
-      <div style={  {["margin-left" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} className={"w-full flex justify-center items-center"}>
+      <div style={  {["marginLeft" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} className={"w-full flex justify-center items-center"}>
         <div style={{["width" as any]:`${zoom}%`}} className={`max-w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100`}>
         
-          <div className={isMagnify ? 'cursor-none': 'cursor-pointer'}>
-            <div className={`diff aspect-[${imageAspectRatio}]`} style={{["aspect-ratio" as any]:`${imageAspectRatio}`}}
+          <div className={`${isMagnify ? 'cursor-none': 'cursor-pointer'}`}>
+            <div className={`diff aspect-[${imageAspectRatio}]`} style={{["aspectRatio" as any]:`${imageAspectRatio}`}}
             onMouseLeave={handleMouseLeave}
             onMouseEnter={handleMouseEnter}
             onMouseMove={handleMouseMove}
@@ -431,3 +441,10 @@ const ZOOM_LEVEL = 2.5;
     </main>
   );
 }
+Home.getinitialProps = async (ctx: any) => {
+  const ipAddress = getIpAddress();
+  console.log("ipAddress: ",ipAddress);
+  return { ipAddress: ipAddress };
+}
+export default Home;
+// export default withIpAddress(Home);
