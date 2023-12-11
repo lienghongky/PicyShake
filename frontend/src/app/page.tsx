@@ -3,7 +3,7 @@ import Image from "next/image";
 import DragAndDrop from "./dragdrop/page";
 import { useState, useEffect } from "react";
 import { json } from "stream/consumers";
-import { getIpAddress, getServerSideProps } from "@/hoc/withIpaddress";
+import { getIpAddress } from "@/hoc/withIpAddress";
 
 
  function Home({ipAddress}: {ipAddress: string}) {
