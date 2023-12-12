@@ -450,14 +450,14 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           
         </div>
       </div>
-      <div className="w-full h-screen overflow-scroll block bg-gray-600">
+      {/* <div className="w-full h-screen overflow-scroll block bg-gray-600">
         <h1>HISTORY</h1>
       {
           histories.map((history: any, index: number) => (
             <History className="block w-full" key={index} history={history} isMagnify={isMagnify} />
           ))
       }
-      </div>
+      </div> */}
       <footer className="text-xs text-center dark:text-gray-200 mt-4">
         Created on {new Date().toLocaleDateString()} &copy; <strong>LIENG HONGKY</strong> | VB
         lab @PNU
