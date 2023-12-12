@@ -71,6 +71,13 @@ class ConnectionManager:
         for user_id in user_ids:
             websocket: WebSocket = self.connections[user_id]
             await websocket.send_json({"result": message})
+    #send message with event name
+    async def send_debug(self, user_ids, message):
+        print("send debug")
+        print(self.connections)
+        for user_id in user_ids:
+            websocket: WebSocket = self.connections[user_id]
+            await websocket.send_json({"debug": message})
     #send progress  
     async def send_progress(self, user_ids, message):
         for user_id in user_ids:
@@ -180,13 +187,18 @@ async def updateProgess():
            await manager.send_progress(["0"], inference.progress+0.1)
         asyncio.sleep(1)
         
-
+def on_pache_denoised(id,image_path):
+    print("on_pache_denoised")
+    # Send the denoised image to the client
+    asyncio.run(manager.send_debug(["0"], {"id":id, "url": image_path}))
 # denoise image and return the denoised image
 def denoise_image(image_path):
+    #get file extension
     # threading.Thread(target=updateProgess).start()
     denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback)
+    inference.on_pache_denoised = on_pache_denoised
     # Send the denoised image to the client
-    asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "psnr": float(psnr), "ssim": float(ssim)}))
+    asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "input":f"{denoised_image_name}/input.png","debug":f"{denoised_image_name}/debug.png", "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
 
 def getModels():

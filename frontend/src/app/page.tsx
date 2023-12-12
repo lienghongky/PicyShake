@@ -1,9 +1,11 @@
 "use client";
 import Image from "next/image";
 import DragAndDrop from "./dragdrop/page";
+import History from "./history";
 import { useState, useEffect } from "react";
 import { json } from "stream/consumers";
 import { getIpAddress } from "@/hoc/withIpAddress";
+
 
 
  function Home({ipAddress}: {ipAddress: string}) {
@@ -68,9 +70,12 @@ import { getIpAddress } from "@/hoc/withIpAddress";
  
   const [baseURL, setBaseURL] = useState<string>("http://localhost:8000");
   const [isToggled, setIsToggled] = useState<boolean>(true);
+  const [isShowHistory, setIsShowHistory] = useState<boolean>(false);
   const [progress, setProgress] = useState(0);
   const [outputImage, setOutputImage] = useState<string>("");
   const [inputImage, setInputImage] = useState<string>("");
+  const [debugImage, setDebugImage] = useState<string>("");
+  const [histories, setHistories] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [models, setModels] = useState<any>([]);
   const [selectedModel, setSelectedModel] = useState(getLocalSelectedModel());
@@ -141,7 +146,17 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           console.log("Result", json.result);
           setOutputImage(`${baseURL}/result/${json.result.url}`);
           setIsLoaded(true);
-        } else if (json.error) {
+          console.log("histories", inputImage, outputImage, debugImage)
+          setHistories([...histories, {
+            id:json.id,
+            inputImage: `${baseURL}/result/${json.result.input}`,
+            outputImage: `${baseURL}/result/${json.result.url}`,
+            debugImage: `${baseURL}/result/${json.result.debug}`,
+          }]);
+        }else if (json.debug) {
+          console.log("Debug", json.debug);
+          setDebugImage(`${baseURL}/result/${json.debug.url}`);
+        }else if (json.error) {
           console.log("Error", json.error);
         } else if (json.message) {
           if (json.message && json.message.type === "alert") {
@@ -183,6 +198,8 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           console.log(res);
           setIsLoaded(false);
           setInputImage(`${baseURL}/input/${res.files[0].input}`);
+          setDebugImage(`${baseURL}/input/${res.files[0].input}`)
+          setOutputImage("");
         })
         .catch((err) => console.log(err));
     }
@@ -320,8 +337,8 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           </label>
          
           <label className="cursor-pointer label">
-          <span className="label-text">Enbale up-scale</span> 
-          <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
+          <span className="label-text">Show History</span> 
+          <input checked={isShowHistory} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsShowHistory(e.target.checked)}/>
           </label>
         </div>
       </div>
@@ -374,8 +391,8 @@ import { getIpAddress } from "@/hoc/withIpAddress";
               
               <div className="diff-item-1">
                 <img
-                  className={isLoaded ? "" : "blur-lg"}
-                  src={isLoaded ? outputImage : inputImage ? inputImage : "https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder-image.png"}
+                  className={isLoaded ? "" : ""}
+                  src={isLoaded ? outputImage : debugImage ? debugImage : "https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder-image.png"}
                 />
               </div>
               <div className="diff-item-2">
@@ -416,7 +433,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
                 <div
                     style={{
                         backgroundPosition: `${position.x}px ${position.y}px`,
-                        backgroundImage: `url(${outputImage})`,
+                        backgroundImage: `url(${outputImage === "" ? debugImage : outputImage})`,
                         backgroundSize: `${imageSize.width * ZOOM_LEVEL}px ${imageSize.height * ZOOM_LEVEL}px`,
                         backgroundRepeat: 'no-repeat',
                         display: isMagnify ? zoomable ? 'block' : 'none' : 'none',
@@ -433,7 +450,14 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           
         </div>
       </div>
-
+      <div className="w-full h-screen overflow-scroll block bg-gray-600">
+        <h1>HISTORY</h1>
+      {
+          histories.map((history: any, index: number) => (
+            <History className="block w-full" key={index} history={history} isMagnify={isMagnify} />
+          ))
+      }
+      </div>
       <footer className="text-xs text-center dark:text-gray-200 mt-4">
         Created on {new Date().toLocaleDateString()} &copy; <strong>LIENG HONGKY</strong> | VB
         lab @PNU

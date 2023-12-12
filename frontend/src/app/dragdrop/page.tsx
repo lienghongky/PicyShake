@@ -122,7 +122,7 @@ export default function DragAndDrop({ onFileSubmit }: DragAndDropProps) {
           to upload
         </p>
 
-        <div className="w-full flex flex-col items-center p-3">
+        {/* <div className="w-full flex flex-col items-center p-3">
           {files.map((file: any, idx: any) => (
             <div key={idx} className="bg-zinc-700/50 rounded-lg p-2 border border-zinc-700/50 w-full flex flex-row space-x-5 whitespace-nowrap">
               <p className="text-ellipsis truncate">{file.name}</p>
@@ -134,7 +134,7 @@ export default function DragAndDrop({ onFileSubmit }: DragAndDropProps) {
               </span>
             </div>
           ))}
-        </div>
+        </div> */}
 
         <button
           className="bg-black rounded-lg p-2 mt-3 w-auto"

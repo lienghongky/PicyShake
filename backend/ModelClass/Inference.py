@@ -218,6 +218,8 @@ class Inference:
       os.makedirs(result_dir, exist_ok=True)
       print(image_path)
       patches, padded_image, noisy_image = self.image_to_patches(image_path) 
+
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
       print(f"Predicting with [{self.model_name}]")
       # Get the denoised image using the model
       denoised_patches = patches
@@ -234,7 +236,7 @@ class Inference:
             progress_callback(step/(patches.shape[0]*patches.shape[1]))
             threading.Thread(target=progress_callback, args=(step/(patches.shape[0]*patches.shape[1]),)).start()
             #save denoised image to debugs
-            threading.Thread(target=self.save_debugged_image, args=(denoised_patches, padded_image.shape, result_dir,)).start()
+            threading.Thread(target=self.save_debugged_image, args=(denoised_patches, padded_image.shape, result_dir,f"{j}-{i}")).start()
 
       
       denoised_image = unpatchify(denoised_patches, padded_image.shape) 
@@ -253,17 +255,13 @@ class Inference:
       self.is_in_progress = False
       return image_name,f"{image_name}/output.png", (0, 0)
 
-    def save_debugged_image(self, patches, imsize, path, space=6):
+    def save_debugged_image(self, patches, imsize, path,patch_number, space=6):
     # Calculate the size of the new image
       new_imsize = (
           imsize[0] + (patches.shape[0] - 1) * space,
           imsize[1] + (patches.shape[1] - 1) * space,
           patches.shape[5]  # Assuming 4th dimension represents color channels
       )
-
-      print(f"patches size{patches.shape}")
-      print(f"new_imsize{new_imsize}")
-      print(f"patches.shape[3]{patches.shape[3]} patches.shape[5]{patches.shape[5]}")
 
      
       # Create a new image with the correct dtype
@@ -284,8 +282,11 @@ class Inference:
               image[y_start:y_end, x_start:x_end, :] = patches[i, j, 0, :, :, :].astype(np.uint8)
 
       # Save the reconstructed image
+      image_id = os.path.basename(path)
+      print(image_id)
       image_path = os.path.join(path, 'debug.png')
       tf.keras.preprocessing.image.save_img(image_path, image)
+      self.on_pache_denoised(image_id,f"{image_id}/debug.png?patch_number={patch_number}")
       
       return image
     
