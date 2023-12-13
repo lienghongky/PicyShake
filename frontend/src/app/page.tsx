@@ -308,7 +308,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           </div>
           </div>
         </div>
-        <div className="fixed left-0 right-0 top-0 bottom-0 overflow-y-scroll overflow-visible">
+        <div className="fixed left-0 right-0 top-0 bottom-0 overflow-y-scroll overflow-visible custom-scrollbar">
           <div className="p-4 w-full">
             <DragAndDrop onFileSubmit={onFileSubmit} />
             <div className="items-center px-2">
