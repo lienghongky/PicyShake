@@ -340,6 +340,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
               <option value={3}>Overlapping</option>
               <option value={4}>Smooth Blending</option>
               <option value={5}>Resizing</option>
+              <option value={6}>Adaptive Resize</option>
             </select>
           </label>
           <div className="m-4 ">

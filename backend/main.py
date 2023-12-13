@@ -196,9 +196,10 @@ def on_pache_denoised(id,image_path):
 # denoise image and return the denoised image
 def denoise_image(image_path,mode):
     #get file extension
+    inference.on_pache_denoised = on_pache_denoised
     # threading.Thread(target=updateProgess).start()
     denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback,mode=mode)
-    inference.on_pache_denoised = on_pache_denoised
+    
     # Send the denoised image to the client
     asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "input":f"{denoised_image_name}/input.png","debug":f"{denoised_image_name}/debug.png", "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)

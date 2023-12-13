@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from sklearn.preprocessing import MinMaxScaler
 import threading
+from scipy.ndimage import gaussian_filter
 
 
 class Inference:
@@ -19,12 +20,13 @@ class Inference:
     class PredictionMode(Enum):
       ITERATE = 1
       BATCH = 2
-      Overlapping = 3
+      OVERLAPPING = 3
       SMOOTH = 4
       RESIZING = 5
+      AUTORESIZING = 6
       
     #initialize the model
-    def __init__(self,model_name='models/v7.weights.06-0.10.keras',output_dir='./files/outputs',progress_callback=None):
+    def __init__(self,model_name='models/v9.LATEST_MODEL_100k.keras',output_dir='./files/outputs',progress_callback=None):
       self.model_name = model_name
       self.output_dir = output_dir
       self.porgress_callback = progress_callback
@@ -71,16 +73,18 @@ class Inference:
     def predict(self, image_path, progress_callback=None, mode=PredictionMode.ITERATE):
       
       #switch case for prediction mode
-      if mode == self.PredictionMode.SMOOTH:
-        return self.predictSmooth(image_path, progress_callback)
+      if mode == self.PredictionMode.ITERATE:
+        return self.predictIterate(image_path, progress_callback)
       elif mode == self.PredictionMode.BATCH:
         return self.predictBatch(image_path, progress_callback)
-      elif mode == self.PredictionMode.ITERATE:
-        return self.predictIterate(image_path, progress_callback)
+      elif mode == self.PredictionMode.OVERLAPPING:
+        return self.predictOverlap(image_path, progress_callback)
       elif mode == self.PredictionMode.SMOOTH:
         return self.predictSmooth(image_path, progress_callback)
-      else:
+      elif mode == self.PredictionMode.RESIZING:
         return self.predictResizing(image_path, progress_callback)
+      else:
+        return self.predictMaxResize(image_path, progress_callback)
       
     #predict
     def predictSmooth(self, image_path, progress_callback=None):
@@ -89,6 +93,10 @@ class Inference:
       if progress_callback is None:
         progress_callback = self.porgress_callback
       print(image_path)
+            
+      image_name = os.path.basename(image_path).split(".")[0]
+      result_dir =  os.path.join(self.output_dir, f'{image_name}')
+      os.makedirs(result_dir, exist_ok=True)
       # try:
       # Load the noisy image
       noisy_image = img_to_array(load_img(image_path))/255.0
@@ -102,39 +110,32 @@ class Inference:
       def pred_func(img_batch_subdiv):
         return self.RIDNet.predict(img_batch_subdiv.astype(np.uint8),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])
       predictions_smooth = predict_img_with_smooth_windowing(
-        input_img, 
-        window_size=256, 
-        subdivisions=2,
-        nb_classes=3,
-        pred_func = pred_func
-      )
+                            input_img, 
+                            window_size=256, 
+                            subdivisions=2,
+                            nb_classes=3,
+                            pred_func = pred_func
+                          )
       
       denoised_image = predictions_smooth*255.0
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
       #save denoised image to debugs
-      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/denoised_image.png')
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"debug.png"), denoised_image)
       #crop image to original size
       denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
-      #save cropped image to debugs
-      Image.fromarray(denoised_image.astype(np.uint8)).save('files/debugs/cropped_denoised_image.png')
-      # convert to double 
-
-
-      # Get the denoised image using the model
-      denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
-      save_path = os.path.join(self.output_dir, denoised_image_name)
       # Save denoised image
-      tf.keras.preprocessing.image.save_img(save_path, tf.cast(denoised_image, tf.uint8))
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"output.png"), tf.cast(denoised_image, tf.uint8))
 
       # Call the progress callback if provided
       if progress_callback is not None:
         progress_callback(1.0)  # Indicate completion
       self.is_in_progress = False
-      return denoised_image_name, save_path, (0, 0)
+      return image_name,f"{image_name}/output.png", (0, 0)
       # except Exception as e:
       #   print("An error occurred:", str(e))
       #   self.is_in_progress = False
       #   return None, None, None
-    #predict
+    #predict with batch
     def predictBatch(self, image_path, progress_callback=None):
       print("predictBatch")
       self.is_in_progress = True
@@ -183,11 +184,12 @@ class Inference:
               Image.fromarray((denoised_output_patche).astype(np.uint8)).save(f'files/debugs/denoised_patch_{i}_{j}.png')
         
         denoised_image = unpatchify(denoised_patches, padded_image.shape) 
+        #save denoised image to debugs
+        tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
+        tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"debug.png"), denoised_image)
         #crop image to original size
         denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
  
-        # Get the denoised image using the model
-        denoised_image_name = image_path.split('/')[-1].split('.')[0] + '_denoised.png'
         # Save denoised image
         tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"output.png"), tf.cast(denoised_image, tf.uint8))
 
@@ -200,6 +202,61 @@ class Inference:
         print("An error occurred:", str(e))
         self.is_in_progress = False
         return None, None, None
+      #predict
+    def predictMaxResize(self, image_path, progress_callback=None):
+      print("predictIterate")
+      self.is_in_progress = True
+      self.progress = 0.0
+      if progress_callback is None:
+        progress_callback = self.porgress_callback
+      
+      image_name = os.path.basename(image_path).split(".")[0]
+      result_dir =  os.path.join(self.output_dir, f'{image_name}')
+      os.makedirs(result_dir, exist_ok=True)
+      print(image_path)
+
+      noisy_image = img_to_array(load_img(image_path)) 
+      patch_width = min(noisy_image.shape[0],noisy_image.shape[1])
+      
+      patches, padded_image, noisy_image = self.image_to_patches(image_path,patch_size=(patch_width,patch_width,3),step=patch_width) 
+      
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
+      print(f"Predicting with [{self.model_name}]")
+      # Get the denoised image using the model
+      denoised_patches = np.copy(patches)
+      step = 0
+      for i in range(patches.shape[0]):
+        for j in range(patches.shape[1]):
+            single_patch_img = patches[i, j, :, :, :][0]
+            single_patch_img = tf.image.resize(single_patch_img, (256, 256))
+            single_patch_img = single_patch_img / 255.0
+            denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
+            denoised_patche = denoised_patche.clip(0, 1)
+            denoised_patche = denoised_patche * 255.0
+            denoised_patche = tf.image.resize(denoised_patche, (patch_width, patch_width))
+            denoised_patches[i, j, :, :, :] = denoised_patche
+            step += 1
+            progress_callback(step/(patches.shape[0]*patches.shape[1]))
+            # threading.Thread(target=progress_callback, args=(step/(patches.shape[0]*patches.shape[1]),)).start()
+            #save denoised image to debugs
+            threading.Thread(target=self.save_debugged_image, args=(denoised_patches, padded_image.shape, result_dir,f"{j}-{i}")).start()
+
+      denoised_image = unpatchify(denoised_patches, padded_image.shape)
+      #crop image to original size
+      denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+      # convert to double 
+      # Get the denoised image using the model
+      
+    
+      # Save denoised image
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"output.png"), tf.cast(denoised_image, tf.uint8))
+
+      # Call the progress callback if provided
+      if progress_callback is not None:
+        progress_callback(1.0)  # Indicate completion
+      self.is_in_progress = False
+      return image_name,f"{image_name}/output.png", (0, 0)
+    
     #predict with resizing
     def predictResizing(self, image_path, progress_callback=None):
       print("predictResizing")
@@ -214,14 +271,21 @@ class Inference:
       #load image
       input = img_to_array(load_img(image_path))/255.0
       noisy_image = tf.image.resize(input, (256, 256))
-      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), input)
+
+      #save denoised image to debugs
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"debug.png"), noisy_image)
+      if self.on_pache_denoised is not None:
+        self.on_pache_denoised(image_name,f"{image_name}/debug.png?patch_number={1}")
+        
+
+
       print(f"Predicting with [{self.model_name}]")
       denoised_image = self.RIDNet.predict(tf.expand_dims(noisy_image, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
       denoised_image = denoised_image.clip(0, 1)
       denoised_image = denoised_image * 255.0
       threading.Thread(target=progress_callback, args=(1.0,)).start()
-      #save denoised image to debugs
-      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"debug.png"), denoised_image)      
+            
       #resize image to original size
       denoised_image = tf.image.resize(denoised_image, (input.shape[0], input.shape[1]))
       # Save denoised image
@@ -232,7 +296,60 @@ class Inference:
         progress_callback(1.0)  # Indicate completion
       self.is_in_progress = False
       return image_name,f"{image_name}/output.png", (0, 0)
+     #predict
+    #predict with overlapping
+    def predictOverlap(self, image_path, progress_callback=None):
+      print("predictIterate")
+      self.is_in_progress = True
+      self.progress = 0.0
+      if progress_callback is None:
+        progress_callback = self.porgress_callback
+      
+      image_name = os.path.basename(image_path).split(".")[0]
+      result_dir =  os.path.join(self.output_dir, f'{image_name}')
+      os.makedirs(result_dir, exist_ok=True)
+      print(image_path)
+      patches, padded_image, noisy_image = self.image_to_patches(image_path,step=200) 
 
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
+      print(f"Predicting with [{self.model_name}]")
+      # Get the denoised image using the model
+      denoised_patches = np.copy(patches)
+      step = 0
+      for i in range(patches.shape[0]):
+        for j in range(patches.shape[1]):
+            single_patch_img = patches[i, j, :, :, :][0]
+            tf.keras.preprocessing.image.save_img(os.path.join(result_dir,f"patch_{j}_{i}.png"), single_patch_img)
+            single_patch_img = single_patch_img / 255.0
+            denoised_patche = self.RIDNet.predict(tf.expand_dims(single_patch_img, axis=0),callbacks=[TQDMPredictCallback(progress_callback=progress_callback)])[0]
+            denoised_patche = denoised_patche.clip(0, 1)
+            denoised_patche = denoised_patche * 255.0
+            denoised_patches[i, j, :, :, :] = denoised_patche
+            step += 1
+            progress_callback(step/(patches.shape[0]*patches.shape[1]))
+            #save single patch image to debugs
+            tf.keras.preprocessing.image.save_img(os.path.join(result_dir,f"denoised_patch_{j}_{i}.png"), denoised_patche)
+            #save denoised image to debugs
+            # threading.Thread(target=self.save_debugged_image, args=(denoised_patches, padded_image.shape, result_dir,f"{j}-{i}")).start()
+
+      # denoised_image = unpatchify(denoised_patches, padded_image.shape)
+      # tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"unp.png"), unpatchify(denoised_patches, padded_image.shape))
+      denoised_image = self.patches_to_image(denoised_patches, padded_image.shape,step=200) 
+      #crop image to original size
+      denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
+      # convert to double 
+      # Get the denoised image using the model
+      
+    
+      # Save denoised image
+      tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"output.png"), tf.cast(denoised_image, tf.uint8))
+
+      # Call the progress callback if provided
+      if progress_callback is not None:
+        progress_callback(1.0)  # Indicate completion
+      self.is_in_progress = False
+      return image_name,f"{image_name}/output.png", (0, 0)
+    
     #predict
     def predictIterate(self, image_path, progress_callback=None):
       print("predictIterate")
@@ -245,12 +362,12 @@ class Inference:
       result_dir =  os.path.join(self.output_dir, f'{image_name}')
       os.makedirs(result_dir, exist_ok=True)
       print(image_path)
-      patches, padded_image, noisy_image = self.image_to_patches(image_path) 
+      patches, padded_image, noisy_image = self.image_to_patches(image_path,step=256) 
 
       tf.keras.preprocessing.image.save_img(os.path.join(result_dir,"input.png"), noisy_image)
       print(f"Predicting with [{self.model_name}]")
       # Get the denoised image using the model
-      denoised_patches = patches
+      denoised_patches = np.copy(patches)
       step = 0
       for i in range(patches.shape[0]):
         for j in range(patches.shape[1]):
@@ -262,12 +379,11 @@ class Inference:
             denoised_patches[i, j, :, :, :] = denoised_patche
             step += 1
             progress_callback(step/(patches.shape[0]*patches.shape[1]))
-            threading.Thread(target=progress_callback, args=(step/(patches.shape[0]*patches.shape[1]),)).start()
+            # threading.Thread(target=progress_callback, args=(step/(patches.shape[0]*patches.shape[1]),)).start()
             #save denoised image to debugs
             threading.Thread(target=self.save_debugged_image, args=(denoised_patches, padded_image.shape, result_dir,f"{j}-{i}")).start()
 
-      
-      denoised_image = unpatchify(denoised_patches, padded_image.shape) 
+      denoised_image = unpatchify(denoised_patches, padded_image.shape)
       #crop image to original size
       denoised_image = denoised_image[:noisy_image.shape[0], :noisy_image.shape[1], :]
       # convert to double 
@@ -313,7 +429,7 @@ class Inference:
       tf.keras.preprocessing.image.save_img(image_path, image)
       if self.on_pache_denoised is not None:
         self.on_pache_denoised(image_id,f"{image_id}/debug.png?patch_number={patch_number}")
-      
+
       return image
     
 
@@ -321,8 +437,6 @@ class Inference:
     #slice image into patchesdebug_dir
     def image_to_patches(self, image_path, patch_size=(256, 256, 3), step=256):
       noisy_image = img_to_array(load_img(image_path))
-      # Set the patch size
-      patch_size = (256, 256, 3)  # Assuming a 3-channel image, adjust as needed
       # check if image is smaller than patch size
       # Pad the image to make it divisible by the patch size
       target_height = ((noisy_image.shape[0] - 1) // patch_size[0] + 1) * patch_size[0]
@@ -337,8 +451,42 @@ class Inference:
       Image.fromarray(padded_image.astype(np.uint8)).save('files/debugs/padded_image.png')
 
       # slice image into 256x256 patches and reconstruct the image back
-      patches = patchify(padded_image.astype(np.uint8), patch_size, step=256)
+      patches = patchify(padded_image.astype(np.uint8), patch_size, step=step)
       return patches, padded_image, noisy_image
+    
+    def patches_to_image(self, patches, imsize, step=256, feathering=2):
+        # Calculate the size of the new image
+        new_imsize = (
+            imsize[0] + (patches.shape[0] - 1) * step,
+            imsize[1] + (patches.shape[1] - 1) * step,
+            patches.shape[5]  # Assuming 4th dimension represents color channels
+        )
+        overlap_size = 256 - step
+        patch_size = 256
+        # Create a new image with the correct dtype
+        image = np.zeros(new_imsize, dtype=np.float64)
+        blend_weights = np.zeros_like(image)
+
+        # Place each patch at the correct position
+        for i in range(patches.shape[0]):
+            for j in range(patches.shape[1]):
+                y_start = i * step
+                y_end = y_start + patches.shape[3]
+
+                x_start = j * step
+                x_end = x_start + patches.shape[3]
+
+                feathered_patch = patches[i, j, 0, :, :, :].astype(np.float64)
+                
+                # Update the image and blend_weights
+                image[y_start:y_end, x_start:x_end, :] += feathered_patch
+                blend_weights[y_start:y_end, x_start:x_end, :] += 1
+
+        # Normalize the image by the blend weights to avoid intensity artifacts
+        image /= blend_weights + 1e-10  # Avoid division by zero
+
+        return image
+
     #display patches of images in a grid
     def display_patches(self, patches):
       try:
