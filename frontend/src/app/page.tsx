@@ -70,7 +70,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
  
   const [baseURL, setBaseURL] = useState<string>("http://localhost:8000");
   const [isToggled, setIsToggled] = useState<boolean>(true);
-  const [isShowHistory, setIsShowHistory] = useState<boolean>(false);
+  const [isShowDebug, setIsShowDebug] = useState<boolean>(false);
   const [progress, setProgress] = useState(0);
   const [outputImage, setOutputImage] = useState<string>("");
   const [inputImage, setInputImage] = useState<string>("");
@@ -79,11 +79,13 @@ import { getIpAddress } from "@/hoc/withIpAddress";
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [models, setModels] = useState<any>([]);
   const [selectedModel, setSelectedModel] = useState(getLocalSelectedModel());
+  const [selectedMode, setSelectedMode] = useState<any>(1);
   const [alert, setAlert] = useState<any>();
-  const [isBatch, setIsBatch] = useState<boolean>(false);
+  const [isOriginalAspectRatio, setIsOriginalAspectRatio] = useState<boolean>(false);
   const [isloading, setIsloading] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean|null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<string>("4/3");
+  const [debugImageAspectRatio, setDebugImageAspectRatio] = useState<string>("4/3");
   const [zoom, setZoom] = useState<number>(50);
   const [isMagnify, setIsMagnify] = useState<boolean>(false);
   const [customBaseURL, setCustomBaseURL] = useState<string>("http://");
@@ -146,13 +148,16 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           console.log("Result", json.result);
           setOutputImage(`${baseURL}/result/${json.result.url}`);
           setIsLoaded(true);
-          console.log("histories", inputImage, outputImage, debugImage)
-          setHistories([...histories, {
+          setIsloading(false);
+          setHistories(prv => { 
+            console.log("previous",prv)
+           return [...prv,{
             id:json.id,
             inputImage: `${baseURL}/result/${json.result.input}`,
             outputImage: `${baseURL}/result/${json.result.url}`,
             debugImage: `${baseURL}/result/${json.result.debug}`,
-          }]);
+          }]});
+          
         }else if (json.debug) {
           console.log("Debug", json.debug);
           setDebugImage(`${baseURL}/result/${json.debug.url}`);
@@ -161,6 +166,9 @@ import { getIpAddress } from "@/hoc/withIpAddress";
         } else if (json.message) {
           if (json.message && json.message.type === "alert") {
             handleAlertMessage(json.message);
+            if(json.message.model_id) {
+              setSelectedModel(json.message.model_id);
+            }
           }
           console.log("Message", json.message);
         } else if (json.connected) {
@@ -183,11 +191,12 @@ import { getIpAddress } from "@/hoc/withIpAddress";
     if (files.length === 0) {
       // no file has been submitted
     } else {
-      
+      setProgress(0); 
       // upload the files to the server path: /files
       const formData = new FormData();
       files.forEach((file: any) => {
         formData.append("files", file);
+        formData.append("mode", selectedMode);
       });
       fetch(`${baseURL}/uploadfiles`, {
         method: "POST",
@@ -200,6 +209,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           setInputImage(`${baseURL}/input/${res.files[0].input}`);
           setDebugImage(`${baseURL}/input/${res.files[0].input}`)
           setOutputImage("");
+          setIsloading(true);
         })
         .catch((err) => console.log(err));
     }
@@ -231,7 +241,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
         {
 
          alert && 
-         <div role="alert" className={`alert alert-${alert.type} absolute left-0 right-0 mx-auto w-fit`}>
+         <div role="alert" className={`bg-green-500 text-white alert alert-${alert.type} absolute left-0 right-0 mx-auto w-fit`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span dangerouslySetInnerHTML={{ __html: alert.message }}></span>
          </div>
@@ -298,49 +308,71 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           </div>
           </div>
         </div>
-        <div className="p-4 w-full">
-          <DragAndDrop onFileSubmit={onFileSubmit} />
-          <div className="items-center px-2">
-            <progress
-              className="progress progress-success w-full"
-              value={progress}
-              max="100"
-            ></progress>
-            <div className="flex justify-between">
-            <p className="text-xs text-right text-teal-400 px-1">Porgess:</p>
-            <p className="text-xs text-right text-teal-400 px-1">{`${progress}%`}</p>
+        <div className="fixed left-0 right-0 top-0 bottom-0 overflow-y-scroll overflow-visible">
+          <div className="p-4 w-full">
+            <DragAndDrop onFileSubmit={onFileSubmit} />
+            <div className="items-center px-2">
+              <progress
+                className="progress progress-success w-full"
+                value={progress}
+                max="100"
+              ></progress>
+              <div className="flex justify-between">
+              <p className="text-xs text-right text-teal-400 px-1">Porgess:</p>
+              <p className="text-xs text-right text-teal-400 px-1">{`${progress}%`}</p>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex w-full justify-center px-4">
-          <select value={selectedModel ? selectedModel.id : -1} onChange={handleSelectChange} className="select select-success w-full max-w-xs " >
-            <option key={-1} value="-1">Default Model</option>
-            {models.map((model: any) => ( <option key={model.id} value={model.id}>{model.name}</option>))}
-          </select>
-        </div>
-        <label className="form-control w-full max-w-xs p-4">
-          <div className="label">
-            <span className="label-text">Denois Mode</span>
+          <div className="flex w-full justify-center px-4">
+            <select value={selectedModel ? selectedModel.id : -1} onChange={handleSelectChange} className="select select-success w-full max-w-xs " >
+              <option key={-1} value="-1">Default Model</option>
+              {models.map((model: any) => ( <option key={model.id} value={model.id}>{model.name}</option>))}
+            </select>
           </div>
-          <select className="select select-bordered">
-            <option disabled value={-1}>Default</option>
-            <option value={1}>Iterate</option>
-            <option value={2}>Batch</option>
-            <option value={3}>Overlapping</option>
-            <option value={4}>Smooth Blending</option>
-          </select>
-        </label>
-        <div className="m-4 ">
-          <label className="cursor-pointer label">
-          <span className="label-text">Save Patches</span> 
-          <input checked={isBatch} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsBatch(e.target.checked)}/>
+          <label className="form-control w-full max-w-xs p-4">
+            <div className="label">
+              <span className="label-text">Denois Mode</span>
+            </div>
+            <select value={selectedMode} onChange={e=>setSelectedMode(e.target.value)}  className="select select-bordered">
+              <option disabled value={-1}>Default</option>
+              <option value={1}>Iterate</option>
+              <option value={2}>Batch</option>
+              <option value={3}>Overlapping</option>
+              <option value={4}>Smooth Blending</option>
+              <option value={5}>Resizing</option>
+            </select>
           </label>
-         
-          <label className="cursor-pointer label">
-          <span className="label-text">Show History</span> 
-          <input checked={isShowHistory} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsShowHistory(e.target.checked)}/>
-          </label>
+          <div className="m-4 ">
+            <label className="cursor-pointer label">
+            <span className="label-text">Original Aspect ratio</span> 
+            <input checked={isOriginalAspectRatio} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsOriginalAspectRatio(e.target.checked)}/>
+            </label>
+          
+            <label className="cursor-pointer label">
+            <span className="label-text">Show Debug</span> 
+            <input checked={isShowDebug} type="checkbox" className="toggle toggle-success" onChange={(e)=>setIsShowDebug(e.target.checked)}/>
+            </label>
+          </div>
+        
+          <div className="w-full p-1 grid grid-cols-2 border-t-2 border-dashed border-gray-600">
+            {
+              histories.map((history: any, index: number) => (
+                <img 
+                onClick={
+                   ()=>{
+                    setInputImage(history.inputImage);
+                    setOutputImage(isShowDebug ? history.debugImage : history.outputImage);
+                    setDebugImage(history.debugImage);
+                   }
+
+                } 
+                className="p-1 aspect-square rounded-sm hover:border-2 border-green-500" 
+                key={index} src={history.outputImage} alt="" />
+              ))
+            }
+          </div>
         </div>
+        
       </div>
       {/* main container */}
       <div className=" z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex  black-opactiy-30">
@@ -379,11 +411,12 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           <span className={`relative inline-flex rounded-full h-3 w-3 ${isConnected == null ? "bg-amber-600" : isConnected ? "bg-green-600":"bg-red-600"}`}></span>
         </span>
       </div>
-      <div style={  {["marginLeft" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} className={"w-full flex justify-center items-center"}>
+      <div  style={  {["paddingLeft" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} 
+            className={"w-full flex justify-center items-center"}>
         <div style={{["width" as any]:`${zoom}%`}} className={`max-w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100`}>
         
           <div className={`${isMagnify ? 'cursor-none': 'cursor-pointer'}`}>
-            <div className={`diff aspect-[${imageAspectRatio}]`} style={{["aspectRatio" as any]:`${imageAspectRatio}`}}
+            <div className={`diff aspect-[${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}]`} style={{["aspectRatio" as any]:`${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}`}}
             onMouseLeave={handleMouseLeave}
             onMouseEnter={handleMouseEnter}
             onMouseMove={handleMouseMove}
@@ -391,8 +424,21 @@ import { getIpAddress } from "@/hoc/withIpAddress";
               
               <div className="diff-item-1">
                 <img
-                  className={isLoaded ? "" : ""}
+                  className={(isShowDebug) ? "object-contain" : ""}
                   src={isLoaded ? outputImage : debugImage ? debugImage : "https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder-image.png"}
+                  onLoad={(e) => {
+                    
+                    const element = e.target as HTMLImageElement;
+                    var width = element.naturalWidth;
+                    var height = element.naturalHeight;
+                    var viewPortHeight = window.innerHeight;
+                    var ratio = width / height;
+                    var elementWidth = viewPortHeight * ratio;
+                    var elementHeight = viewPortHeight;
+                    if (isShowDebug && elementWidth && elementHeight) {
+                      setDebugImageAspectRatio(`${elementWidth}/${elementHeight}`);
+                    }
+                  }}
                 />
               </div>
               <div className="diff-item-2">
@@ -417,6 +463,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
               </div>
               <div className="diff-resizer cursor-col-resize"></div>
               <div
+                  key={inputImage}
                     style={{
                         backgroundPosition: `${position.x}px ${position.y}px`,
                         backgroundImage: `url(${inputImage})`,

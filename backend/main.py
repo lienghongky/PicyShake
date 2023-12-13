@@ -1,5 +1,5 @@
 from typing import Union, Annotated
-from fastapi import FastAPI, WebSocket, File, UploadFile
+from fastapi import FastAPI, WebSocket, File, UploadFile,Form
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import datetime as dt
@@ -112,9 +112,10 @@ async def create_upload_files(
     files: Annotated[
         list[UploadFile], File(description="Multiple files as UploadFile")
     ],
+    mode: str = Form(...),
 
 ):
-    print(files)
+    print("mode:",mode)
     filenames = []
     for i, file in enumerate(files):
         current_time = dt.datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -127,7 +128,8 @@ async def create_upload_files(
         basefilename = os.path.basename(file_location)
         filenames.append({"input":basefilename, "blurhash": blurhash_str})
         # Run denoising process in background thread
-        modelThread = threading.Thread(target=denoise_image, args=(file_location,))
+        mode =  Inference.PredictionMode(int(mode))
+        modelThread = threading.Thread(target=denoise_image, args=(file_location,mode))
         modelThread.start()
     return {"files": filenames}
 # handle Models list request 
@@ -141,7 +143,7 @@ async def select_model(model_id: int):
     if model_name != inference.model_name:
         result = inference.load_model(f"models/{model_name}")
         if result:
-            return {"alert": {"type": "success", "message": f"Model loaded successfully [<strong>{model_name}</strong>]"}}
+            return {"alert": {"type": "success", "message": f"Model loaded successfully [<strong>{model_name}</strong>]","model_id":model_id}}
         else:
             return {"alert": {"type": "error", "message": "Model loading failed"}}
     return {"alert": {"type": "error", "message": f"No model name {model_name}"}}
@@ -192,10 +194,10 @@ def on_pache_denoised(id,image_path):
     # Send the denoised image to the client
     asyncio.run(manager.send_debug(["0"], {"id":id, "url": image_path}))
 # denoise image and return the denoised image
-def denoise_image(image_path):
+def denoise_image(image_path,mode):
     #get file extension
     # threading.Thread(target=updateProgess).start()
-    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback)
+    denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback,mode=mode)
     inference.on_pache_denoised = on_pache_denoised
     # Send the denoised image to the client
     asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "input":f"{denoised_image_name}/input.png","debug":f"{denoised_image_name}/debug.png", "psnr": float(psnr), "ssim": float(ssim)}))
