@@ -89,7 +89,19 @@ import { getIpAddress } from "@/hoc/withIpAddress";
   const [zoom, setZoom] = useState<number>(50);
   const [isMagnify, setIsMagnify] = useState<boolean>(false);
   const [customBaseURL, setCustomBaseURL] = useState<string>("http://");
+  const [previousDebugImage, setPreviousDebugImage] = useState<string>("");
 
+  const downloadImage = (url:any, filename:any) =>{
+    console.log("downloadImage", url, filename);
+    fetch(url)
+        .then(response => response.blob())
+        .then(blob => {
+          var item = new ClipboardItem({ "image/png": blob });
+          navigator.clipboard.write([item]);
+          handleAlertMessage({type: "primary", message: `Copied <strong>${filename}</strong> to clipboard`});
+        })
+        .catch(console.error);
+}
   const handleAlertMessage = (message:any) => {
     if (message) {
       setAlert(message);
@@ -152,10 +164,11 @@ import { getIpAddress } from "@/hoc/withIpAddress";
           setHistories(prv => { 
             console.log("previous",prv)
            return [...prv,{
-            id:json.id,
+            id:json.result.id,
             inputImage: `${baseURL}/result/${json.result.input}`,
             outputImage: `${baseURL}/result/${json.result.url}`,
             debugImage: `${baseURL}/result/${json.result.debug}`,
+            modelName: json.result.model_name,
           }]});
           
         }else if (json.debug) {
@@ -241,7 +254,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
         {
 
          alert && 
-         <div role="alert" className={`bg-green-500 text-white alert alert-${alert.type} absolute left-0 right-0 mx-auto w-fit`}>
+         <div role="alert" className={`bg-${alert.type === "success"?"green":"gray"}-500 text-white alert alert-${alert.type} absolute left-0 right-0 mx-auto w-fit`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span dangerouslySetInnerHTML={{ __html: alert.message }}></span>
          </div>
@@ -355,7 +368,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
             </label>
           </div>
         
-          <div className="w-full p-1 grid grid-cols-2 border-t-2 border-dashed border-gray-600">
+          <div className="w-full p-1 grid grid-cols-3 border-t-2 border-dashed border-gray-600">
             {
               histories.map((history: any, index: number) => (
                 <img 
@@ -367,6 +380,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
                    }
 
                 } 
+                title={history.modelName}
                 className="p-1 aspect-square rounded-sm hover:border-2 border-green-500" 
                 key={index} src={history.outputImage} alt="" />
               ))
@@ -414,10 +428,19 @@ import { getIpAddress } from "@/hoc/withIpAddress";
       </div>
       <div  style={  {["paddingLeft" as any]:isToggled ? `${Math.min(Math.max(20* zoom/65,10),20)}rem` : "0%"}} 
             className={"w-full flex justify-center items-center"}>
-        <div style={{["width" as any]:`${zoom}%`}} className={`max-w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100`}>
+        <div 
+          style={{["width" as any]:`${zoom}%`}} 
+          className={`max-w-2/3 mockup-window rounded-b-xl border bg-base-300 my-8 transition-all duration-100`}>
         
           <div className={`${isMagnify ? 'cursor-none': 'cursor-pointer'}`}>
-            <div className={`diff aspect-[${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}]`} style={{["aspectRatio" as any]:`${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}`}}
+            <div 
+            onClick={(e)=>{
+              if (isMagnify){
+                downloadImage(outputImage, "output.png");
+              }
+            }}
+            className={`diff aspect-[${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}]`} 
+            style={{["aspectRatio" as any]:`${(isShowDebug) ? debugImageAspectRatio :imageAspectRatio}`}}
             onMouseLeave={handleMouseLeave}
             onMouseEnter={handleMouseEnter}
             onMouseMove={handleMouseMove}
@@ -427,6 +450,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
                 <img
                   className={(isShowDebug) ? "object-contain" : ""}
                   src={isLoaded ? outputImage : debugImage ? debugImage : "https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder-image.png"}
+                  loading="lazy"
                   onLoad={(e) => {
                     
                     const element = e.target as HTMLImageElement;
@@ -442,8 +466,13 @@ import { getIpAddress } from "@/hoc/withIpAddress";
                   }}
                 />
               </div>
-              <div className="diff-item-2">
+              <div 
+                onClick={(e)=>{
+                  downloadImage(inputImage, "input.png");
+                }}
+                className="diff-item-2">
                 <img 
+                  
                   src={inputImage ? inputImage : "https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder-image.png"} 
                   onLoad={(e) => {
                     

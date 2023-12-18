@@ -201,12 +201,44 @@ def denoise_image(image_path,mode):
     denoised_image_name, save_path, (psnr, ssim) = inference.predict(image_path,progress_callback=progress_callback,mode=mode)
     
     # Send the denoised image to the client
-    asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "input":f"{denoised_image_name}/input.png","debug":f"{denoised_image_name}/debug.png", "psnr": float(psnr), "ssim": float(ssim)}))
+    asyncio.run(manager.send_result(["0"], {"id":denoised_image_name, "url": save_path, "input":f"{denoised_image_name}/input.png","debug":f"{denoised_image_name}/debug.png","model_name":inference.model_name, "psnr": float(psnr), "ssim": float(ssim)}))
     return denoised_image_name, save_path, (psnr, ssim)
 
 def getModels():
     models = []
-    for i, filename in enumerate(os.listdir("./models")):
+    lists = os.listdir("./models")
+    #sort lists by name
+    lists.sort()
+    for i, filename in enumerate(lists):
         models.append({"id":i, "name":filename})
     return models
 
+
+
+# Root Project Directory 
+# ROOT
+# ├── docker-compose.yml 
+# ├── backend
+# │   ├── main.py
+# │   ├── requirements.txt
+# │   ├── Dockerfile
+# │   ├── ModelClass
+# │   │   ├── Inference.py
+# │   │   └── __init__.py
+# |   └── files
+# │      ├── inputs
+# │      │   ├── 2021090111555540000_0_1.jpg
+# │      └── outputs
+# │          └──  2021090111555540000_0_1
+# │               ├── debug.png
+# │               ├── input.png
+# │               └── output.png
+# └── Frontend
+#     ├── package.json
+#     ├── public
+#     ├── Dockerfile
+#     └── src
+#         └── App
+#             ├── App.css
+#             ├── page.jsx
+#             └── App.js

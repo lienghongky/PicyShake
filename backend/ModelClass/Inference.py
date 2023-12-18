@@ -216,7 +216,8 @@ class Inference:
       print(image_path)
 
       noisy_image = img_to_array(load_img(image_path)) 
-      patch_width = min(noisy_image.shape[0],noisy_image.shape[1])
+      min_dim = min(noisy_image.shape[0],noisy_image.shape[1])
+      patch_width = min(512,min_dim) 
       
       patches, padded_image, noisy_image = self.image_to_patches(image_path,patch_size=(patch_width,patch_width,3),step=patch_width) 
       
@@ -427,8 +428,11 @@ class Inference:
       print(image_id)
       image_path = os.path.join(path, 'debug.png')
       tf.keras.preprocessing.image.save_img(image_path, image)
+      image_sm_path = os.path.join(path, 'debug.jpg')
+      image_sm = Image.fromarray(image.astype(np.uint8))
+      image_sm.save(image_sm_path, format='JPEG', optimize=True, quality=60)
       if self.on_pache_denoised is not None:
-        self.on_pache_denoised(image_id,f"{image_id}/debug.png?patch_number={patch_number}")
+        self.on_pache_denoised(image_id,f"{image_id}/debug.jpg?patch_number={patch_number}")
 
       return image
     
