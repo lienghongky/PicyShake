@@ -409,7 +409,7 @@ import { getIpAddress } from "@/hoc/withIpAddress";
             rel="noopener noreferrer"
           >
             By{" "}
-            <Image
+            <img
               src="/logo.png"
               alt="Vercel Logo"
               className=""
