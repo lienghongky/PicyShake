@@ -1,11 +1,10 @@
 "use client";
-import { on } from "events";
-import { use, useRef, useState,useEffect } from "react";
+import { useRef, useState,useEffect } from "react";
+
 
 export interface DragAndDropProps {
-  onFileSubmit?: (files: []) => void;
+  onFileSubmit?: (files: File[]) => void;
 }
-
 export default function DragAndDrop({ onFileSubmit }: DragAndDropProps) {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const inputRef = useRef<any>(null);
