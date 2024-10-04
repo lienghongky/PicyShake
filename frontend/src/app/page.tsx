@@ -30,7 +30,8 @@ import { getIpAddress } from "@/hoc/withIpAddress";
     const MAGNIFIER_SIZE = 120;
     const ZOOM_LEVEL = 2.5;
 
-// ImageEffect component
+
+    const [imageError, setImageError] = useState<boolean>(false);
 
     // State variables
     const [zoomable, setZoomable] = useState(true);
@@ -409,14 +410,20 @@ import { getIpAddress } from "@/hoc/withIpAddress";
             rel="noopener noreferrer"
           >
             By{" "}
-            <img
+            {
+              imageError ? (<h1
+              className="text-3xl font-bold text-white"
+              >VBLab</h1>):(
+                <img
               src="/logo.png"
-              alt="Vercel Logo"
+              alt="VBLab"
               className=""
               width={100}
               height={24}
-              priority
+              onError={() =>setImageError(true)}
             />
+              )
+            }
           </a>
           
           
