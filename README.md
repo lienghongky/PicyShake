@@ -1,7 +1,7 @@
 # PicyShake
-https://lienghongky.github.io/PicyShake/
 
-[Demo: https://lienghongky.github.io/PicyShake](https://lienghongky.github.io/PicyShake/)
+### Demo: 
+[https://lienghongky.github.io/PicyShake](https://lienghongky.github.io/PicyShake/)
 
 
 ## Start Application manually
